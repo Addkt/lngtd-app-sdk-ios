@@ -22,7 +22,7 @@ public enum ConfigFetchOutcome: Sendable, Equatable {
     case failed(ConfigFetchError)
 }
 
-public actor ConfigFetchCoordinator {
+public actor ConfigFetchCoordinator: ConfigFetching {
     private let transport: ConfigTransport
     private let clock: () -> TimeInterval
     /// `nonisolated` because it is immutable after init, so reading it needs no actor
