@@ -1,7 +1,10 @@
 import Foundation
 
 /// An envelope for caching `AppConfig` to disk.
-public struct ConfigRecord: Codable, Equatable {
+/// `Sendable` because the fetch coordinator returns one across an actor boundary.
+/// All stored properties are value types, so the conformance is genuine rather than
+/// an `@unchecked` assertion.
+public struct ConfigRecord: Codable, Equatable, Sendable {
     public let fetchedAt: TimeInterval
     public let etag: String?
 
