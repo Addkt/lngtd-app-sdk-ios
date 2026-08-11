@@ -66,6 +66,13 @@ identifier_name:
     warning: 1
   excluded: [id, ok, to, at, dc]
 
+# `AppConfig.AdUnit.CodingKeys` is three levels deep and entirely idiomatic — a
+# nested model type with its own coding keys. The default limit of 1 would force
+# either a flattened `AppConfigAdUnit` or CodingKeys hoisted away from the type it
+# belongs to, both worse than the nesting.
+nesting:
+  type_level: 3
+
 disabled_rules:
   # Trailing commas in multi-line literals are a deliberate choice here: adding an
   # entry then touches one line instead of two, which keeps diffs and blame honest.

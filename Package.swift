@@ -73,6 +73,7 @@ let package = Package(
                 // Generated from the real web ladder by Tools/FloorContract.
                 // Never hand-edit; regenerate and let CI's --check gate notice.
                 .copy("Fixtures/floor-contract.json"),
+                .copy("Fixtures/lambda_ct_app_response.json"),
             ]
         ),
     ]
