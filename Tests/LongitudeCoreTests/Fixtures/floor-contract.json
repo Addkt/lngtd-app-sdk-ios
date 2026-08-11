@@ -164,6 +164,86 @@
       "expectedJSType": "number"
     },
     {
+      "name": "zero_at_top_tier_does_not_fall_through",
+      "why": "PRESENCE, NOT TRUTHINESS: the ladder tests hasOwnProperty, so a 0 on the most specific key IS a match. It is assigned, then the falsy check replaces it with baseFloor — it does NOT fall through to a lower tier. A port that gates each tier on JS truthiness returns 1.0 here instead of 0.33. Verified directly against the web function.",
+      "ladderTier": "full",
+      "input": {
+        "platform": "ios",
+        "country": "US",
+        "deviceClass": {
+          "web": "mobile",
+          "mobile": "phone"
+        },
+        "section": "app",
+        "sessionDepth": 0,
+        "uid": "home_top_uid",
+        "baseFloor": 0.33,
+        "dynamicFloorsEnabled": true,
+        "dynamicFloorParameters": {},
+        "floors": {
+          "ios_US_{DC}_app_A": 0,
+          "ios_US": 1,
+          "US": 0.5,
+          "default": 0.25
+        },
+        "includeHighestBid": false
+      },
+      "expected": 0.33,
+      "expectedJSType": "number"
+    },
+    {
+      "name": "empty_string_at_top_tier_does_not_fall_through",
+      "why": "Same presence rule for another falsy value: an empty string on the most specific key matches, then falls back to baseFloor rather than to the ios_US tier.",
+      "ladderTier": "full",
+      "input": {
+        "platform": "ios",
+        "country": "US",
+        "deviceClass": {
+          "web": "mobile",
+          "mobile": "phone"
+        },
+        "section": "app",
+        "sessionDepth": 0,
+        "uid": "home_top_uid",
+        "baseFloor": 0.33,
+        "dynamicFloorsEnabled": true,
+        "dynamicFloorParameters": {},
+        "floors": {
+          "ios_US_{DC}_app_A": "",
+          "ios_US": 1
+        },
+        "includeHighestBid": false
+      },
+      "expected": 0.33,
+      "expectedJSType": "number"
+    },
+    {
+      "name": "null_at_top_tier_does_not_fall_through",
+      "why": "And for null. A Swift port must therefore distinguish \"key absent\" from \"key present holding a falsy value\" — dropping null keys while parsing silently converts this case into a fall-through.",
+      "ladderTier": "full",
+      "input": {
+        "platform": "ios",
+        "country": "US",
+        "deviceClass": {
+          "web": "mobile",
+          "mobile": "phone"
+        },
+        "section": "app",
+        "sessionDepth": 0,
+        "uid": "home_top_uid",
+        "baseFloor": 0.33,
+        "dynamicFloorsEnabled": true,
+        "dynamicFloorParameters": {},
+        "floors": {
+          "ios_US_{DC}_app_A": null,
+          "ios_US": 1
+        },
+        "includeHighestBid": false
+      },
+      "expected": 0.33,
+      "expectedJSType": "number"
+    },
+    {
       "name": "string_floor_value_returned_as_string",
       "why": "THE OTHER TRAP: tier 3 does no type check (unlike geo_floors, which requires typeof === \"number\"). A string \"1.50\" is truthy, so it is returned as a STRING. A Swift Double-typed port cannot reproduce this and must decide deliberately — see the fixture note.",
       "ladderTier": "full",
