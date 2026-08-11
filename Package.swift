@@ -56,7 +56,13 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "LNGTDExceptionShim",
+            path: "Sources/LNGTDExceptionShim",
+            publicHeadersPath: "include"
+        ),
+        .target(
             name: "LongitudeCore",
+            dependencies: ["LNGTDExceptionShim"],
             path: "Sources/LongitudeCore"
         ),
         .testTarget(
