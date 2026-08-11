@@ -103,6 +103,37 @@ public actor ConfigStore {
         await backgroundRevalidation?.value
     }
 
+    /// Geo for the floor ladder, resolved against the age of the config being served.
+    ///
+    /// This lives on the store because only the store knows **which tier answered**,
+    /// and that changes the answer. A bundled config has no fetch time at all: its geo
+    /// was baked in when the app was submitted, so it must always be treated as stale
+    /// and fall back to the device region. A caller outside the store cannot tell the
+    /// difference, and would silently use a build-time country for the floor ladder —
+    /// which is worse than a wrong floor, because a mismatched country matches no floor
+    /// key and sends every unit to baseFloor.
+    public func geo(deviceRegion: String?) -> GeoFreshness {
+        guard let config = memoryConfig else {
+            return GeoFreshness.resolve(
+                fetchedAt: staleGeoTimestamp, configCountry: nil,
+                deviceRegion: deviceRegion, clock: clock
+            )
+        }
+
+        // A bundled config carries no record, so there is no honest fetchedAt to use.
+        let fetchedAt = isMemoryBundled ? staleGeoTimestamp
+                                        : (memoryRecord?.fetchedAt ?? staleGeoTimestamp)
+
+        return GeoFreshness.resolve(
+            fetchedAt: fetchedAt, configCountry: config.geo?.country,
+            deviceRegion: deviceRegion, clock: clock
+        )
+    }
+
+    /// A day in the past — comfortably beyond the geo staleness threshold without
+    /// hard-coding the threshold's own value here.
+    private var staleGeoTimestamp: TimeInterval { clock() - 86_400 }
+
     /// May wait, but only when it has to.
     public func config(timeout: TimeInterval) async -> AppConfig? {
         let (resolution, decodeError) = resolveLocalConfig()

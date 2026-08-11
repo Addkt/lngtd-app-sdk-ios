@@ -74,7 +74,7 @@ public enum BaseFloorInput: Equatable {
 /// `imp.bidfloor: 0.0` is semantically different to omitting the field — PBS
 /// enforces a zero floor as a floor. Collapsing the two would silently change what
 /// the auction is told.
-public enum ResolvedFloor: Equatable {
+public enum ResolvedFloor: Equatable, Sendable {
     case value(Double)
     case noFloor
 }
