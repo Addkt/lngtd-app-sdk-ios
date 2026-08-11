@@ -49,12 +49,22 @@ All are written up with named fixture cases in
    sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
    ```
    This needs your password, so it is not something the agent can do.
-2. **Mirror the Prebid repo.** The plan requires
-   `github.com/lngtd/prebid-mobile-ios` tagged `3.3.3-lngtd.1` with the core-only
-   manifest promoted to root. It does not exist yet. Without it SPM resolves
-   upstream's root manifest, which unconditionally depends on GMA **and AppLovin**,
-   so every publisher gets phantom AppLovin in their `Package.resolved`. This gates
-   the `LongitudeAuction` target, not `LongitudeCore`.
+2. ~~Mirror the Prebid repo.~~ **Done** —
+   [Addkt/prebid-mobile-ios](https://github.com/Addkt/prebid-mobile-ios) at tag
+   `3.3.3-lngtd.1`, a fork of `prebid/prebid-mobile-ios` (Apache-2.0) diverging in
+   exactly one file: the core-only manifest promoted to root. Public, because it
+   becomes a transitive SPM dependency that every publisher's Xcode fetches
+   directly.
+
+   Verified rather than assumed: upstream's root manifest really does depend on
+   both GMA and AppLovin unconditionally; the mirror resolves to
+   `prebid-mobile-ios 3.3.3-lngtd.1` + GMA 13.7.0 + its UMP transitive with **no
+   AppLovin**; and the whole graph compiles for iOS Simulator (818 steps,
+   `BUILD SUCCEEDED`).
+
+   **The pin must be `exact: "3.3.3-lngtd.1"`, not the plan's
+   `.upToNextMinor(from: "3.3.3")`** — a pre-release tag sorts below `3.3.3`, so
+   the range excludes it and resolution fails outright. Details in `Package.swift`.
 3. **M0 spike decisions** the plan defers, both needing a device or simulator:
    whether app slots require GAM line items (raised during Phase 1c-3 and deferred
    to M0), and confirming `impORTBConfig` drives bidder params on live LNGTD PBS.

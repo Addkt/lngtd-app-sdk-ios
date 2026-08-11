@@ -4,11 +4,30 @@
 //
 // The plan's full graph is
 //   Longitude → LongitudeGAM → LongitudeAuction → LongitudeCore → LNGTDExceptionShim
-// but LongitudeAuction depends on the Prebid mirror at
-// github.com/lngtd/prebid-mobile-ios tagged 3.3.3-lngtd.1, which does not exist
-// yet, and LongitudeGAM depends on GoogleMobileAds. Declaring either target now
-// would make `swift build` fail on an unresolvable dependency and leave the repo
-// with no working verification at all. They get added when the mirror lands.
+// The ad-SDK targets are added when they have something to do; declaring them
+// before then only means `swift build` pulls ~350MB of Prebid on every clean
+// checkout to compile nothing.
+//
+// The Prebid mirror now exists and is verified:
+//
+//     .package(url: "https://github.com/Addkt/prebid-mobile-ios.git",
+//              exact: "3.3.3-lngtd.1")
+//
+// Note `exact:`, NOT the plan's `.upToNextMinor(from: "3.3.3")`. Those two are
+// incompatible and the plan asks for both: `3.3.3-lngtd.1` is a semver
+// *pre-release*, which sorts BELOW `3.3.3`, so the range `3.3.3..<3.4.0` excludes
+// it. SwiftPM's exact words when tried:
+//
+//     error: Dependencies could not be resolved because no versions of
+//     'prebid-mobile-ios' match the requirement 3.3.3..<3.4.0
+//
+// An exact pin is the right answer anyway — the plan wanted a tight constraint
+// because the SDK leans on undocumented Prebid merge and reentrancy behaviour, and
+// range flexibility across a fork we control is illusory: a new upstream version
+// needs a new fork branch and tag regardless.
+//
+// GMA is pinned `.upToNextMajor(from: "13.0.0")` to match Prebid's own constraint
+// so SPM can unify — verified against the mirror, which resolves GMA 13.7.0.
 //
 // macOS is declared alongside iOS purely for test velocity: LongitudeCore is
 // Foundation-only, so `swift test` runs on the host in milliseconds rather than
