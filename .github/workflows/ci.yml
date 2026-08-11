@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The floor fixtures are generated from base.js in the addkt repo. This job is
+  # the SDK-side half of the drift gate described in Tools/FloorContract/README.md.
+  #
+  # It needs a checkout of a private sibling repo, so it is gated on a secret.
+  # Without the secret it reports SKIPPED rather than passing quietly — a green
+  # tick that proves nothing is worse than a missing one, and the authoritative
+  # gate lives in addkt's own CI anyway (that is where base.js changes originate).
+  floor-contract:
+    name: Floor contract fixtures
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: sdk
+
+      # Passed via env rather than interpolated into the command line, so the
+      # secret never appears in an argv that could be echoed by set -x.
+      - name: Check for addkt access
+        id: access
+        env:
+          ADDKT_READ_TOKEN: ${{ secrets.ADDKT_READ_TOKEN }}
+        run: |
+          if [ -n "$ADDKT_READ_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out addkt (for base.js)
+        if: steps.access.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Addkt/addkt
+          token: ${{ secrets.ADDKT_READ_TOKEN }}
+          path: addkt
+          sparse-checkout: addkt/static/header/v4-zone/src/units
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        if: steps.access.outputs.available == 'true'
+        with:
+          node-version: '22'
+
+      - name: Assert fixtures match the live web ladder
+        if: steps.access.outputs.available == 'true'
+        working-directory: sdk
+        env:
+          LNGTD_BASE_JS: ${{ github.workspace }}/addkt/addkt/static/header/v4-zone/src/units/base.js
+        run: |
+          test -f "$LNGTD_BASE_JS" || {
+            echo "::error::addkt checked out but base.js is missing at $LNGTD_BASE_JS."
+            echo "The sparse-checkout path or the file location has changed. Not skipping —"
+            echo "this job exists to catch exactly this kind of silent drift."
+            exit 1
+          }
+          node Tools/FloorContract/generate.mjs --check
+
+      - name: Report skip
+        if: steps.access.outputs.available != 'true'
+        run: |
+          echo "::warning::SKIPPED — no ADDKT_READ_TOKEN secret, so base.js is unavailable."
+          echo "The floor drift gate did not run. Set the secret, or rely on addkt's CI."
+
+  swift:
+    name: Build and test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
+
+      - name: Show toolchain
+        run: swift --version && xcodebuild -version
+
+      # LongitudeCore and LNGTDExceptionShim are the dependency-free targets and
+      # are where the floor contract test lives. Once the Prebid mirror exists,
+      # add an xcodebuild step for LongitudeAuction/LongitudeGAM against a
+      # simulator destination — they cannot build for macOS (GMA is
+      # arm64 device + simulator only).
+      - name: swift build
+        run: swift build
+
+      - name: swift test
+        run: swift test
+
+  lint:
+    name: SwiftLint
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Lint
+        run: swiftlint lint --strict --reporter github-actions-logging
