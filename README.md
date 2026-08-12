@@ -7,17 +7,36 @@ review as [Addkt/addkt#1278](https://github.com/Addkt/addkt/pull/1278),
 
 ## Status
 
-**No Swift source yet, deliberately.** This machine has Command Line Tools but no
-Xcode, so the toolchain is Swift 5.3.2 with no iOS SDK and no simulators:
+Toolchain: Xcode 26.3, Swift 6.2.4, iOS 26.2 SDK.
 
-- Swift 5.3 predates `async`/`await` and `Task`, which the plan's config layer uses
-- `LongitudeCore` is specified as Foundation **and UIKit**, so it needs the iOS SDK
-- `xcodebuild` is unavailable, so no target can be built and `swift test` cannot run
+```bash
+swift build && swift test        # LongitudeCore, ~3s, no simulator
+xcodebuild -scheme LongitudeGAM -destination 'generic/platform=iOS Simulator' build
+swiftlint lint --strict
+```
 
-Every delegated change in Phase 1 shipped a bug that only running the code caught,
-and in several cases the accompanying tests encoded the bug. Writing an SDK that
-cannot be compiled would repeat that at much larger scale. Xcode is a hard
-prerequisite — see "Unblocking" below.
+**Two build paths, on purpose.** `LongitudeCore` is Foundation-only and tests on the
+macOS host in about three seconds, which is what makes 100+ tests worth running on
+every change. `LongitudeGAM` needs GoogleMobileAds, which is iOS-only — so its
+GMA dependency is conditional on iOS and every source file is wrapped in
+`#if os(iOS)`. On macOS it compiles to an empty module; the simulator build is what
+actually typechecks it.
+
+Removing either half of that arrangement silently moves the whole suite onto the slow
+path, so CI asserts the empty-module build still happens.
+
+### What this means for confidence
+
+Everything in `LongitudeCore` is verified by running it. `LongitudeGAM` is not, and
+cannot be by any test in this repo: it is a thin forwarding shell over a binary
+framework, and its correctness depends on GMA delegate semantics. It compiles, and
+that is the extent of the guarantee. The demo app in the plan — side-by-side GMA vs
+Longitude, debug overlay, 20-slot feed — is the thing that would actually exercise it,
+and it does not exist yet.
+
+That asymmetry is why as much logic as possible lives in `LongitudeCore`:
+`SlotResolution` and `LongitudeEngine` make every decision the banner needs, so the
+GAM layer only wires and forwards.
 
 ## What is here
 
@@ -44,11 +63,7 @@ All are written up with named fixture cases in
 
 ## Unblocking
 
-1. **Install Xcode** (App Store, ~15 GB), then point the toolchain at it:
-   ```bash
-   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-   ```
-   This needs your password, so it is not something the agent can do.
+1. ~~Install Xcode.~~ **Done** — Xcode 26.3, Swift 6.2.4, iOS 26.2 SDK.
 2. ~~Mirror the Prebid repo.~~ **Done** —
    [Addkt/prebid-mobile-ios](https://github.com/Addkt/prebid-mobile-ios) at tag
    `3.3.3-lngtd.1`, a fork of `prebid/prebid-mobile-ios` (Apache-2.0) diverging in

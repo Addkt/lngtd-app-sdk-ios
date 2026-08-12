@@ -53,6 +53,18 @@ let package = Package(
     ],
     products: [
         .library(name: "LongitudeCore", targets: ["LongitudeCore"]),
+        // What a publisher adds. LongitudeGAM re-exports the core, so one product is
+        // the whole SDK as far as an integration is concerned.
+        .library(name: "LongitudeGAM", targets: ["LongitudeGAM"]),
+    ],
+    dependencies: [
+        // Pinned .upToNextMajor(from: "13.0.0") to match Prebid's own constraint, so
+        // SPM can unify the two when LongitudeAuction arrives. Verified against the
+        // LNGTD Prebid mirror, which resolves GMA 13.7.0 alongside this.
+        .package(
+            url: "https://github.com/googleads/swift-package-manager-google-mobile-ads.git",
+            .upToNextMajor(from: "13.0.0")
+        ),
     ],
     targets: [
         .target(
@@ -64,6 +76,30 @@ let package = Package(
             name: "LongitudeCore",
             dependencies: ["LNGTDExceptionShim"],
             path: "Sources/LongitudeCore"
+        ),
+        // GoogleMobileAds is iOS-only, and naively depending on it would end the
+        // millisecond host test loop for the entire package. Two things keep it alive:
+        //
+        //  1. the product dependency is conditional on iOS, so a macOS build never
+        //     tries to link an iOS-only binary target; and
+        //  2. every source file here is wrapped in `#if os(iOS)`, so on macOS this
+        //     target compiles to an empty module rather than failing on the import.
+        //
+        // The result is that `swift test` on the host still runs the 102 LongitudeCore
+        // tests in ~3s, while the simulator build gets the real thing. Removing either
+        // half breaks that, so if you find yourself deleting an `#if os(iOS)` here,
+        // check `swift build` on macOS before you commit.
+        .target(
+            name: "LongitudeGAM",
+            dependencies: [
+                "LongitudeCore",
+                .product(
+                    name: "GoogleMobileAds",
+                    package: "swift-package-manager-google-mobile-ads",
+                    condition: .when(platforms: [.iOS])
+                ),
+            ],
+            path: "Sources/LongitudeGAM"
         ),
         .testTarget(
             name: "LongitudeCoreTests",

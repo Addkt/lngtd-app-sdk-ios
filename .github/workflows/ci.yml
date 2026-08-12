@@ -86,16 +86,36 @@ jobs:
       - name: Show toolchain
         run: swift --version && xcodebuild -version
 
-      # LongitudeCore and LNGTDExceptionShim are the dependency-free targets and
-      # are where the floor contract test lives. Once the Prebid mirror exists,
-      # add an xcodebuild step for LongitudeAuction/LongitudeGAM against a
-      # simulator destination — they cannot build for macOS (GMA is
-      # arm64 device + simulator only).
-      - name: swift build
+      # LongitudeCore and LNGTDExceptionShim are Foundation-only, so they build and
+      # test on the macOS host in seconds. LongitudeGAM's sources are wrapped in
+      # `#if os(iOS)` and its GoogleMobileAds dependency is conditional on iOS, so
+      # this compiles it to an empty module rather than failing — which is what keeps
+      # the fast loop. The simulator step below is what actually typechecks it.
+      - name: swift build (host)
         run: swift build
 
-      - name: swift test
+      - name: swift test (host)
         run: swift test
+
+      # The only build that compiles LongitudeGAM for real. If this is skipped, the
+      # banner wrapper is unverified: nothing in the host suite touches it.
+      - name: xcodebuild (iOS Simulator)
+        run: |
+          xcodebuild -scheme LongitudeGAM \
+            -destination 'generic/platform=iOS Simulator' \
+            -skipPackagePluginValidation \
+            build
+
+      # A macOS build that stops compiling LongitudeGAM to an empty module would
+      # silently move the host suite off the fast path, so assert the module is still
+      # produced rather than trusting it.
+      - name: assert LongitudeGAM still builds for the host
+        run: |
+          test -f "$(swift build --show-bin-path)/Modules/LongitudeGAM.swiftmodule" || {
+            echo "::error::LongitudeGAM no longer builds for macOS. Its sources must stay"
+            echo "wrapped in #if os(iOS) so the host test loop keeps working."
+            exit 1
+          }
 
   lint:
     name: SwiftLint
