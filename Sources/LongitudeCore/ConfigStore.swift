@@ -103,6 +103,60 @@ public actor ConfigStore {
         await backgroundRevalidation?.value
     }
 
+    /// What the demo app's debug overlay reads, and what a publisher support ticket
+    /// should quote. The plan specifies these fields, so they are API rather than
+    /// something the overlay reaches in and computes for itself.
+    public struct Diagnostics: Sendable, Equatable {
+        /// The `version` string from the served config, if any.
+        public let configVersion: String?
+        /// Which tier answered. `nil` when nothing is held.
+        public let source: Source?
+        /// Age of the held record. `nil` for bundled config, which has no fetch time —
+        /// and that nil is informative, not missing data.
+        public let ageSeconds: TimeInterval?
+        public let freshness: ConfigFreshness?
+        public let passthroughReason: ConfigStorePassthroughReason?
+        /// How often an ad request had to wait on the network because no tier could
+        /// answer. The plan calls this a top-line SLO; it should be 0 in a healthy app.
+        public let networkGateHits: Int
+
+        public enum Source: String, Sendable, Equatable {
+            case memory
+            case disk
+            case bundled
+        }
+    }
+
+    public func diagnostics() -> Diagnostics {
+        guard let config = memoryConfig else {
+            return Diagnostics(
+                configVersion: nil, source: nil, ageSeconds: nil, freshness: nil,
+                passthroughReason: passthroughReason, networkGateHits: networkGateHitCount
+            )
+        }
+
+        // `memory` is not reported as a source: by the time anything is in memory it
+        // arrived from disk, the bundle or the network, and saying "memory" would hide
+        // the fact that matters. Bundled is distinguished because its age is unknowable.
+        let source: Diagnostics.Source = isMemoryBundled ? .bundled : .disk
+        let age = isMemoryBundled ? nil : memoryRecord.map { clock() - $0.fetchedAt }
+        let freshness = memoryRecord.map {
+            ConfigFreshness.classify(
+                fetchedAt: $0.fetchedAt, ttl: config.ttl,
+                isError: config.isServerError, clock: clock
+            )
+        } ?? (isMemoryBundled ? ConfigFreshness.staleUsable : nil)
+
+        return Diagnostics(
+            configVersion: config.version,
+            source: source,
+            ageSeconds: age,
+            freshness: freshness,
+            passthroughReason: passthroughReason,
+            networkGateHits: networkGateHitCount
+        )
+    }
+
     /// Geo for the floor ladder, resolved against the age of the config being served.
     ///
     /// This lives on the store because only the store knows **which tier answered**,

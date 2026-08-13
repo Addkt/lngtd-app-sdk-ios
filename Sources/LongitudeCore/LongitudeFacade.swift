@@ -144,6 +144,11 @@ public actor LongitudeEngine {
         _ = name
     }
 
+    /// Diagnostics for the debug overlay. See `ConfigStore.Diagnostics`.
+    public func diagnostics() async -> ConfigStore.Diagnostics {
+        await store.diagnostics()
+    }
+
     /// Maps the store's reason for withholding a config onto a passthrough cause.
     private func passthroughCause() async -> PassthroughCause {
         switch await store.passthroughReason {

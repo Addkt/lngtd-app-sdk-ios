@@ -62,6 +62,13 @@ public final class LNGTDBannerView: UIView {
     /// directly, and why. Phase 2e tags subsequent events with this.
     public private(set) var passthroughCause: PassthroughCause?
 
+    /// The plan the most recent load resolved to, or nil if it went passthrough. Read by
+    /// the demo app's debug overlay to show the resolved floor and gamPath per slot.
+    public private(set) var lastPlan: LongitudeSlotPlan?
+
+    /// Fires after each load resolves, so an overlay can refresh without polling.
+    public var onResolution: ((SlotResolution) -> Void)?
+
     // MARK: - Internals
 
     private let gamBanner = AdManagerBannerView()
@@ -145,11 +152,14 @@ public final class LNGTDBannerView: UIView {
             case .longitude(let plan):
                 self.applyPlan(plan)
                 self.passthroughCause = nil
+                self.lastPlan = plan
             case .passthrough(let cause):
                 // Leave adUnitID and validAdSizes exactly as the publisher set them.
                 self.passthroughCause = cause
+                self.lastPlan = nil
             }
 
+            self.onResolution?(resolution)
             self.gamBanner.load(request)
         }
     }

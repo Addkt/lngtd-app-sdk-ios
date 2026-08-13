@@ -64,6 +64,16 @@ public enum Longitude {
         guard let engine else { return nil }
         return LNGTDBannerView(slot: slot, engine: engine)
     }
+
+    /// Config state for a debug overlay or a support ticket. Nil before `start`.
+    ///
+    /// Public because the plan's debug overlay needs exactly these fields, and an
+    /// overlay that had to reach into internals would mean the SDK gives publishers no
+    /// way to diagnose their own integration.
+    public static func diagnostics() async -> ConfigStore.Diagnostics? {
+        guard let engine else { return nil }
+        return await engine.diagnostics()
+    }
 }
 
 private extension LongitudeEngine {

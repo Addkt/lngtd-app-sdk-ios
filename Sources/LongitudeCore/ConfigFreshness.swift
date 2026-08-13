@@ -1,6 +1,6 @@
 import Foundation
 
-public enum ConfigFreshness: Equatable {
+public enum ConfigFreshness: Equatable, Sendable {
     case fresh
     case revalidate
     case staleUsable
@@ -43,12 +43,12 @@ public enum ConfigFreshness: Equatable {
     }
 }
 
-public enum GeoSource: Equatable {
+public enum GeoSource: Equatable, Sendable {
     case config
     case device
 }
 
-public struct GeoFreshness: Equatable {
+public struct GeoFreshness: Equatable, Sendable {
     public let country: String
     public let source: GeoSource
 
