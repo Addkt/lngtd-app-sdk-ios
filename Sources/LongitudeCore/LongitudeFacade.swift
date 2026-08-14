@@ -133,17 +133,6 @@ public actor LongitudeEngine {
         return .longitude(plan)
     }
 
-    /// The `pageview` analogue.
-    ///
-    /// Deliberately inert. The session model this feeds — `pageview_id`,
-    /// `session_depth`, `referrer_url` and the 30-minute background timeout — is Phase
-    /// 2e, and inventing a partial version here would mean two session models to
-    /// reconcile later. The API exists now so publisher integration code does not have
-    /// to change when 2e lands.
-    public func trackScreenView(_ name: String) {
-        _ = name
-    }
-
     /// Diagnostics for the debug overlay. See `ConfigStore.Diagnostics`.
     public func diagnostics() async -> ConfigStore.Diagnostics {
         await store.diagnostics()

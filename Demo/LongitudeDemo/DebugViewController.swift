@@ -69,6 +69,11 @@ final class DebugViewController: UIViewController {
         timer?.invalidate()
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        Longitude.trackScreenView("Debug")
+    }
+
     @objc private func didTapEnqueue() {
         Longitude.enqueueTestEvent()
     }
@@ -106,6 +111,15 @@ final class DebugViewController: UIViewController {
             }
 
             if let pipeline = await Longitude.pipelineDiagnostics() {
+                lines.append("")
+                lines.append("── session ──")
+                lines.append("session id             \(pipeline.sessionId)")
+                lines.append("session depth          \(pipeline.sessionDepth)")
+                lines.append("page                   \(pipeline.page ?? "none")")
+                lines.append("referrer               \(pipeline.referrer ?? "none")")
+                let sampledStr = pipeline.isSampled.map { $0 ? "yes" : "no" } ?? "not evaluated yet"
+                lines.append("sampled                \(sampledStr)")
+
                 lines.append("")
                 lines.append("── pipeline ──")
                 lines.append("pending queue depth    \(pipeline.pendingQueueDepth)")

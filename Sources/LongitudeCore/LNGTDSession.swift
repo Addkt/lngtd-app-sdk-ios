@@ -13,6 +13,8 @@ public final class LNGTDSession: @unchecked Sendable {
 
     private var _backgroundedAt: TimeInterval?
     private var _isSampled: Bool?
+    /// Load-bearing, not vestigial: it makes the first screen view report depth 0. See
+    /// `trackScreenView`.
     private var _hasTrackedScreen: Bool
 
     // 30 minutes in the background expires the session.
@@ -55,6 +57,11 @@ public final class LNGTDSession: @unchecked Sendable {
         return _referrer
     }
 
+    public var isSampledDecision: Bool? {
+        lock.lock(); defer { lock.unlock() }
+        return _isSampled
+    }
+
     public func didEnterBackground() {
         lock.lock(); defer { lock.unlock() }
         _backgroundedAt = clock()
@@ -73,7 +80,24 @@ public final class LNGTDSession: @unchecked Sendable {
         _backgroundedAt = nil
     }
 
-    public func trackScreenView(_ name: String) {
+    /// Everything a pageview needs, captured under one lock acquisition.
+    ///
+    /// `trackScreenView` returns this rather than leaving the caller to read `sessionId`,
+    /// `sessionDepth`, `pageviewId`, `page` and `referrer` back one at a time. Each of those
+    /// accessors takes the lock separately, so a second `trackScreenView` interleaving between
+    /// them yields an event carrying one screen's name and another's depth and pageview id.
+    /// Today every caller arrives on the main actor and cannot race, but nothing in the type
+    /// enforces that, and a mislabelled pageview is invisible until a funnel is wrong.
+    public struct Snapshot: Sendable {
+        public let sessionId: String
+        public let sessionDepth: Int
+        public let pageviewId: String
+        public let page: String?
+        public let referrer: String?
+    }
+
+    @discardableResult
+    public func trackScreenView(_ name: String) -> Snapshot {
         lock.lock(); defer { lock.unlock() }
 
         // We count tracking the same screen name twice in a row as a second screen view.
@@ -81,14 +105,29 @@ public final class LNGTDSession: @unchecked Sendable {
         _referrer = _page
         _page = name
 
+        // ZERO-BASED, matching the web exactly: `config.js:397-418` assigns
+        // `this.sessionDepth = parseInt(currSessDepth)` *before* writing the incremented value
+        // back, so the first pageview of a session reports 0, the second 1, the third 2.
+        //
+        // The contract says session_depth is "screens this session, as web counts pageviews",
+        // and the phrase reads like a 1-based count — it is not. Making this 1-based puts every
+        // app session one ahead of every web session in a column both write, so any
+        // app-versus-web comparison is silently off by one and nothing errors.
         if _hasTrackedScreen {
             _sessionDepth += 1
         } else {
             _hasTrackedScreen = true
-            // sessionDepth stays 0 on the first track
         }
 
         _pageviewId = UUID().uuidString
+
+        return Snapshot(
+            sessionId: _sessionId,
+            sessionDepth: _sessionDepth,
+            pageviewId: _pageviewId,
+            page: _page,
+            referrer: _referrer
+        )
     }
 
     /// Evaluates if the current session is sampled.

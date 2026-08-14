@@ -35,6 +35,8 @@ public struct LNGTDEventCustomDetails: Encodable, Sendable {
     public let connection: String?
     public let sessionId: String?
     public let configVersion: String?
+    /// The contract lacks a top-level `pageview_id`, so it goes here in `custom` for now.
+    public let pageviewId: String?
 
     public let uid: String?
     public let bidUid: String?
@@ -58,6 +60,7 @@ public struct LNGTDEventCustomDetails: Encodable, Sendable {
         connection: String? = nil,
         sessionId: String? = nil,
         configVersion: String? = nil,
+        pageviewId: String? = nil,
         uid: String? = nil,
         bidUid: String? = nil,
         auctionId: String? = nil,
@@ -79,6 +82,7 @@ public struct LNGTDEventCustomDetails: Encodable, Sendable {
         self.connection = connection
         self.sessionId = sessionId
         self.configVersion = configVersion
+        self.pageviewId = pageviewId
         self.uid = uid
         self.bidUid = bidUid
         self.auctionId = auctionId
@@ -104,6 +108,7 @@ public struct LNGTDEventCustomDetails: Encodable, Sendable {
         case attStatus = "att_status"
         case sessionId = "session_id"
         case configVersion = "config_version"
+        case pageviewId = "pageview_id"
         case bidUid = "bid_uid"
         case auctionId = "auction_id"
     }

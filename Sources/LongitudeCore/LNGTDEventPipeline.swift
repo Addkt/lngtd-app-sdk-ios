@@ -162,11 +162,23 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
         public let ticksFired: Int
         public let lastTrigger: Trigger?
         public let isBackgroundTaskActive: Bool
+        public let sessionId: String
+        public let sessionDepth: Int
+        public let page: String?
+        public let referrer: String?
+        public let isSampled: Bool?
     }
 
     public let queue: LNGTDEventQueue
     public let sink: LNGTDDurableEventSink
     public let store: LNGTDEventStore
+    public let session: LNGTDSession
+
+    /// Hardcoding `.phone` here would label every iPad as a phone, and phone-versus-tablet is a
+    /// targeting dimension the warehouse reports on — a systematic mislabel nothing surfaces.
+    /// Determining it needs `UIDevice`, so `LongitudeGAM` supplies it; Core defaults to `.phone`
+    /// only because `Details.deviceType` has no default and the macOS host cannot know.
+    private let deviceType: LNGTDDeviceType
 
     private let backgroundHost: LNGTDBackgroundTaskHost?
     private let timerFactory: LNGTDEventPipelineTimerFactory
@@ -184,6 +196,7 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
     private var workTail: Task<Void, Never>?
     private var workGeneration = 0
 
+    /// - Parameter session: the session tracker.
     /// - Parameter isSampled: Required, with no default. 2e-1 decided sampling per session and
     ///   2e-3 made the queue take that decision; a default of `{ true }` here would let 2e-6
     ///   ship with sampling silently disabled, which the collector would feel as volume rather
@@ -200,19 +213,50 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
         store: LNGTDEventStore,
         transport: LNGTDEventTransport,
         backgroundHost: LNGTDBackgroundTaskHost?,
+        session: LNGTDSession = LNGTDSession(),
         isSampled: @escaping @Sendable () -> Bool,
+        deviceType: LNGTDDeviceType = .phone,
         tickInterval: TimeInterval = 1.0,
         clock: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         timerFactory: LNGTDEventPipelineTimerFactory = DefaultEventTimerFactory()
     ) {
         self.store = store
+        self.deviceType = deviceType
         self.backgroundHost = backgroundHost
+        self.session = session
         self.tickInterval = tickInterval
         self.timerFactory = timerFactory
 
         let sink = LNGTDDurableEventSink(store: store, transport: transport)
         self.sink = sink
         self.queue = LNGTDEventQueue(sink: sink, clock: clock, isSampled: isSampled)
+    }
+
+    // MARK: - API
+
+    public func trackScreenView(_ name: String) {
+        // One snapshot, so the event cannot mix one screen's name with another's depth.
+        let state = session.trackScreenView(name)
+
+        let custom = LNGTDEventCustomDetails(
+            platform: .ios,
+            sessionId: state.sessionId,
+            pageviewId: state.pageviewId
+        )
+
+        let details = LNGTDEvent.Details(
+            page: state.page,
+            // A screen name, not a URL. `referrer_url` is the wire name the warehouse already
+            // reads; the plan maps the previous screen onto it rather than inventing a key.
+            referrerUrl: state.referrer,
+            deviceType: deviceType,
+            sessionDepth: state.sessionDepth,
+            custom: custom
+        )
+
+        let event = LNGTDEvent(event: .pageview, details: details)
+        let queue = self.queue
+        chain { await queue.enqueue(event) }
     }
 
     // MARK: - Lifecycle
@@ -322,7 +366,12 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
             storedRecordCount: stored,
             ticksFired: snapshot.ticks,
             lastTrigger: snapshot.trigger,
-            isBackgroundTaskActive: snapshot.liveTasks > 0
+            isBackgroundTaskActive: snapshot.liveTasks > 0,
+            sessionId: session.sessionId,
+            sessionDepth: session.sessionDepth,
+            page: session.page,
+            referrer: session.referrer,
+            isSampled: session.isSampledDecision
         )
     }
 

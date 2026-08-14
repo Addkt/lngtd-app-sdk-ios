@@ -61,6 +61,11 @@ final class FeedViewController: UIViewController {
         }
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        Longitude.trackScreenView("Feed")
+    }
+
     private func startAutoScroll() {
         var row = 0
         Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { [weak self] timer in

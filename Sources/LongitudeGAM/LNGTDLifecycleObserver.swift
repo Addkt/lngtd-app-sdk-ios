@@ -75,7 +75,13 @@ public final class LNGTDLifecycleObserver: @unchecked Sendable {
 
         // Block observers retain their closure, so `self` is captured weakly.
         observe(UIApplication.willResignActiveNotification) { $0.willResignActive() }
-        observe(UIApplication.didEnterBackgroundNotification) { $0.didEnterBackground() }
+        observe(UIApplication.didEnterBackgroundNotification) { pipeline in
+            pipeline.session.didEnterBackground()
+            pipeline.didEnterBackground()
+        }
+        observe(UIApplication.willEnterForegroundNotification) { pipeline in
+            pipeline.session.willEnterForeground()
+        }
         observe(UIApplication.didBecomeActiveNotification) { $0.didBecomeActive() }
     }
 

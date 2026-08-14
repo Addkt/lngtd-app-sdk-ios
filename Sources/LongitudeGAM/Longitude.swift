@@ -1,7 +1,27 @@
 #if os(iOS)
 import Foundation
 import GoogleMobileAds
+import UIKit
 import LongitudeCore
+
+private final class ConfigRateBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _rate: Double?
+
+    init(rate: Double?) {
+        self._rate = rate
+    }
+
+    var rate: Double? {
+        lock.lock(); defer { lock.unlock() }
+        return _rate
+    }
+
+    func update(rate: Double?) {
+        lock.lock(); defer { lock.unlock() }
+        self._rate = rate
+    }
+}
 
 /// The publisher-facing entry point. Replaces `MobileAds.shared.start()`.
 ///
@@ -15,6 +35,7 @@ public enum Longitude {
     private static var pipeline: LNGTDEventPipeline?
     private static var observer: LNGTDLifecycleObserver?
     private static var startCalled = false
+    private static let samplingSalt = "LNGTDSample"
 
     /// Starts the SDK. **Never blocks.**
     ///
@@ -42,6 +63,16 @@ public enum Longitude {
         let store = configuration.makeStore(account: accountId, section: section)
         let created = LongitudeEngine(store: store, section: section)
         engine = created
+
+        let bundledConfig = BundledConfigLoader().load()
+        let rateBox = ConfigRateBox(rate: bundledConfig?.config.account?.sampleRate)
+
+        Task {
+            await store.setOnSampleRateUpdate { rate in
+                rateBox.update(rate: rate)
+            }
+        }
+
         created.startNonBlocking()
 
         let eventStoreDir = configuration.cacheDirectory
@@ -54,13 +85,20 @@ public enum Longitude {
             fallbackURL: configuration.eventFallbackURL
         )
 
+        let session = LNGTDSession()
+        // A constant salt, not publisher-supplied: a publisher-chosen salt would make two apps'
+        // sampling correlated or anticorrelated for no benefit.
+        let sampler = LNGTDSampler(salt: Self.samplingSalt)
+
         let createdPipeline = LNGTDEventPipeline(
             store: eventStore,
             transport: transport,
             backgroundHost: UIKitBackgroundTaskHost(),
-            // 2e-6 replaces this with the real per-session decision from LNGTDSampling. It is a
-            // required parameter precisely so that substitution cannot be forgotten silently.
-            isSampled: { true },
+            session: session,
+            // A nil rate means no config has ever carried one. 1.0 is the deliberate direction:
+            // over-sending is recoverable, under-sending silently deletes reporting.
+            isSampled: { session.isSampled(sampler: sampler, sampleRate: rateBox.rate ?? 1.0) },
+            deviceType: UIDevice.current.userInterfaceIdiom == .pad ? .tablet : .phone,
             tickInterval: configuration.tickInterval
         )
 
@@ -80,10 +118,10 @@ public enum Longitude {
         MobileAds.shared.start(completionHandler: nil)
     }
 
-    /// The `pageview` analogue. Inert until Phase 2e supplies the session model.
+    /// The `pageview` analogue.
     public static func trackScreenView(_ name: String) {
-        guard let engine else { return }
-        Task { await engine.trackScreenView(name) }
+        guard let pipeline else { return }
+        pipeline.trackScreenView(name)
     }
 
     /// Enqueues a test event to verify the event pipeline before `trackScreenView` is wired.

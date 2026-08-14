@@ -30,6 +30,11 @@ final class SideBySideViewController: UIViewController {
         lngtdStatus.text = lngtdLoadState + "\n" + lngtdResolution
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        Longitude.trackScreenView("Side By Side")
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
