@@ -15,12 +15,17 @@ import UIKit
 final class DebugViewController: UIViewController {
 
     private let output = UILabel()
+    private let enqueueButton = UIButton(type: .system)
     private var probeBanner: LNGTDBannerView?
     private var timer: Timer?
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
+
+        enqueueButton.setTitle("Enqueue Test Event", for: .normal)
+        enqueueButton.addTarget(self, action: #selector(didTapEnqueue), for: .touchUpInside)
+        enqueueButton.translatesAutoresizingMaskIntoConstraints = false
 
         output.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         output.numberOfLines = 0
@@ -30,9 +35,13 @@ final class DebugViewController: UIViewController {
         scroll.translatesAutoresizingMaskIntoConstraints = false
         scroll.addSubview(output)
         view.addSubview(scroll)
+        view.addSubview(enqueueButton)
 
         NSLayoutConstraint.activate([
-            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            enqueueButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            enqueueButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+
+            scroll.topAnchor.constraint(equalTo: enqueueButton.bottomAnchor, constant: 16),
             scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scroll.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -58,6 +67,10 @@ final class DebugViewController: UIViewController {
 
     deinit {
         timer?.invalidate()
+    }
+
+    @objc private func didTapEnqueue() {
+        Longitude.enqueueTestEvent()
     }
 
     private func refresh() {
@@ -92,6 +105,17 @@ final class DebugViewController: UIViewController {
                 lines.append("Longitude.start has not been called")
             }
 
+            if let pipeline = await Longitude.pipelineDiagnostics() {
+                lines.append("")
+                lines.append("── pipeline ──")
+                lines.append("pending queue depth    \(pipeline.pendingQueueDepth)")
+                lines.append("stored record count    \(pipeline.storedRecordCount)")
+                lines.append("ticks fired            \(pipeline.ticksFired)")
+                lines.append("last trigger           \(pipeline.lastTrigger?.rawValue ?? "—")")
+                lines.append("bg task active         \(pipeline.isBackgroundTaskActive)")
+                lines.append("event endpoint         \(DemoMetrics.shared.eventEndpoint)")
+            }
+
             lines.append("")
             lines.append("── slot demo_banner ──")
             if let plan = probeBanner?.lastPlan {
@@ -117,7 +141,6 @@ final class DebugViewController: UIViewController {
             lines.append("── not yet wired ──")
             lines.append("targeting keys         needs LongitudeAuction (M2)")
             lines.append("bid table              needs LongitudeAuction (M2)")
-            lines.append("event queue depth      needs the event logger (2e)")
 
             self.output.text = lines.joined(separator: "\n")
         }

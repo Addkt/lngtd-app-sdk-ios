@@ -72,6 +72,16 @@ public final class LNGTDEventStore: @unchecked Sendable {
     /// Where records live. Internal so tests can ask rather than rebuilding the name.
     var storeFileURL: URL { fileURL }
 
+    /// How many records are held, without `readAll()`'s side effect of reporting a
+    /// skipped-line count. A debug overlay polling `readAll()` would re-report the same
+    /// corrupt line on every refresh.
+    public func storedRecordCount() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        seedIfNeeded()
+        return recordCount
+    }
+
     // MARK: - Append
 
     /// Appends encoded events, trimming the oldest records if the caps require it.

@@ -12,6 +12,8 @@ import LongitudeCore
 public enum Longitude {
 
     private static var engine: LongitudeEngine?
+    private static var pipeline: LNGTDEventPipeline?
+    private static var observer: LNGTDLifecycleObserver?
     private static var startCalled = false
 
     /// Starts the SDK. **Never blocks.**
@@ -42,6 +44,32 @@ public enum Longitude {
         engine = created
         created.startNonBlocking()
 
+        let eventStoreDir = configuration.cacheDirectory
+            .deletingLastPathComponent()
+            .appendingPathComponent("events", isDirectory: true)
+
+        let eventStore = LNGTDEventStore(baseDirectory: eventStoreDir)
+        let transport = URLSessionEventTransport(
+            primaryURL: configuration.eventAPIURL,
+            fallbackURL: configuration.eventFallbackURL
+        )
+
+        let createdPipeline = LNGTDEventPipeline(
+            store: eventStore,
+            transport: transport,
+            backgroundHost: UIKitBackgroundTaskHost(),
+            // 2e-6 replaces this with the real per-session decision from LNGTDSampling. It is a
+            // required parameter precisely so that substitution cannot be forgotten silently.
+            isSampled: { true },
+            tickInterval: configuration.tickInterval
+        )
+
+        pipeline = createdPipeline
+        observer = LNGTDLifecycleObserver(pipeline: createdPipeline)
+
+        // Kicks the launch drain and installs the flush timer. Non-blocking.
+        createdPipeline.start()
+
         if !waitsForATT {
             startAdSDK()
         }
@@ -56,6 +84,21 @@ public enum Longitude {
     public static func trackScreenView(_ name: String) {
         guard let engine else { return }
         Task { await engine.trackScreenView(name) }
+    }
+
+    /// Enqueues a test event to verify the event pipeline before `trackScreenView` is wired.
+    public static func enqueueTestEvent() {
+        guard let pipeline else { return }
+        let event = LNGTDEvent(
+            event: .sdkInit,
+            details: LNGTDEvent.Details(
+                account: "demo",
+                section: "app",
+                deviceType: .phone,
+                custom: LNGTDEventCustomDetails(platform: .ios)
+            )
+        )
+        Task { await pipeline.queue.enqueue(event) }
     }
 
     /// Creates a banner for a slot. Fails only if `start` has not been called, which is a
@@ -73,6 +116,12 @@ public enum Longitude {
     public static func diagnostics() async -> ConfigStore.Diagnostics? {
         guard let engine else { return nil }
         return await engine.diagnostics()
+    }
+
+    /// Pipeline state for the debug overlay. Nil before `start`.
+    public static func pipelineDiagnostics() async -> LNGTDEventPipeline.Diagnostics? {
+        guard let pipeline else { return nil }
+        return await pipeline.diagnostics()
     }
 }
 

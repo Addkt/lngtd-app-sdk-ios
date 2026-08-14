@@ -14,9 +14,31 @@ public struct LongitudeConfiguration {
     /// The plan's default is 1.5s with a 3.0s hard cap, enforced by the coordinator.
     public var configTimeout: TimeInterval
 
-    public init(cacheDirectory: URL? = nil, configTimeout: TimeInterval = 1.5) {
+    /// How often the event timer polls, in seconds. **Not** the flush interval: that is
+    /// `LNGTDEventQueue`'s own 5000ms gate. Polling faster avoids two five-second gates in
+    /// series silently doubling worst-case flush latency.
+    public var tickInterval: TimeInterval
+
+    /// Where events are sent. Exposed so the Demo app can simulate network failures.
+    public var eventAPIURL: URL
+
+    /// The fallback endpoint (`logging.js:256`). Configurable for the same reason as the
+    /// primary: without it, exercising a failure path falls back onto production, so the very
+    /// test meant to avoid touching the live collector posts to it.
+    public var eventFallbackURL: URL
+
+    public init(
+        cacheDirectory: URL? = nil,
+        configTimeout: TimeInterval = 1.5,
+        tickInterval: TimeInterval = 1.0,
+        eventAPIURL: URL = URLSessionEventTransport.defaultPrimaryURL,
+        eventFallbackURL: URL = URLSessionEventTransport.defaultFallbackURL
+    ) {
         self.cacheDirectory = cacheDirectory ?? Self.defaultCacheDirectory()
         self.configTimeout = configTimeout
+        self.tickInterval = tickInterval
+        self.eventAPIURL = eventAPIURL
+        self.eventFallbackURL = eventFallbackURL
     }
 
     /// `Library/Caches/com.lngtd.sdk/config/`, resolved through FileManager rather than
