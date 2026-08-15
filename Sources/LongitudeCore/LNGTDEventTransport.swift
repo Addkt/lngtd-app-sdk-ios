@@ -17,6 +17,8 @@ public protocol LNGTDEventTransport: Sendable {
     func send(payload: Data) async -> LNGTDEventTransportResult
 }
 
+public let LNGTDSDKVersion = "ios/1.0.0"
+
 public final class URLSessionEventTransport: LNGTDEventTransport {
     /// `logging.js:255` and `logging.js:256`. Built once from literals that are known to
     /// parse, so the failure is impossible rather than force-unwrapped at every init.
@@ -36,7 +38,7 @@ public final class URLSessionEventTransport: LNGTDEventTransport {
         session: URLSession = .shared,
         primaryURL: URL = URLSessionEventTransport.defaultPrimaryURL,
         fallbackURL: URL = URLSessionEventTransport.defaultFallbackURL,
-        sdkVersion: String = "ios/1.0.0"
+        sdkVersion: String = LNGTDSDKVersion
     ) {
         self.session = session
         self.primaryURL = primaryURL

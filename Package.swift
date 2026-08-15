@@ -99,7 +99,10 @@ let package = Package(
                     condition: .when(platforms: [.iOS])
                 ),
             ],
-            path: "Sources/LongitudeGAM"
+            path: "Sources/LongitudeGAM",
+            resources: [
+                .process("PrivacyInfo.xcprivacy")
+            ]
         ),
         .testTarget(
             name: "LongitudeCoreTests",

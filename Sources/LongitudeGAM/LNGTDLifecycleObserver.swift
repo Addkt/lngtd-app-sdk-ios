@@ -82,7 +82,15 @@ public final class LNGTDLifecycleObserver: @unchecked Sendable {
         observe(UIApplication.willEnterForegroundNotification) { pipeline in
             pipeline.session.willEnterForeground()
         }
-        observe(UIApplication.didBecomeActiveNotification) { $0.didBecomeActive() }
+        observe(UIApplication.didBecomeActiveNotification) { pipeline in
+            // `Longitude` is @MainActor and this block is not, so the hop is explicit rather
+            // than assumed. It is also why the publisher-callable
+            // `Longitude.refreshDeviceMetadata()` exists: this refresh lands a beat after the
+            // notification, so a publisher whose ATT prompt has just resolved should call it
+            // directly rather than rely on the next foreground.
+            Task { @MainActor in Longitude.refreshDeviceMetadata() }
+            pipeline.didBecomeActive()
+        }
     }
 
     private func observe(

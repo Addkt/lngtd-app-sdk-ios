@@ -130,6 +130,18 @@ final class DebugViewController: UIViewController {
                 lines.append("event endpoint         \(DemoMetrics.shared.eventEndpoint)")
             }
 
+            if let meta = Longitude.metadataDiagnostics() {
+                lines.append("")
+                lines.append("── metadata ──")
+                lines.append("app bundle             \(meta.appBundle ?? "—")")
+                lines.append("app version            \(meta.appVersion ?? "—")")
+                lines.append("os version             \(meta.osVersion ?? "—")")
+                lines.append("device model           \(meta.deviceModel ?? "—")")
+                lines.append("att status             \(meta.attStatus ?? "—")")
+                lines.append("ifa                    \(meta.ifa ?? "—")")
+                lines.append("ifa type               \(meta.ifaType ?? "—")")
+            }
+
             lines.append("")
             lines.append("── slot demo_banner ──")
             if let plan = probeBanner?.lastPlan {

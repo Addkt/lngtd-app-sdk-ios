@@ -14,87 +14,6 @@ public protocol LNGTDBackgroundTaskHost: Sendable {
     func endTask(_ token: LNGTDBackgroundTaskToken)
 }
 
-public protocol LNGTDEventPipelineTimer: Sendable {
-    func resume()
-    func suspend()
-    func cancel()
-}
-
-public protocol LNGTDEventPipelineTimerFactory: Sendable {
-    func makeTimer(
-        interval: TimeInterval, handler: @escaping @Sendable () -> Void
-    ) -> LNGTDEventPipelineTimer
-}
-
-/// The repeating flush, on a serial `.utility` queue.
-///
-/// `DispatchSourceTimer` rather than `Timer`: a `Timer` needs a run loop, and a
-/// `DispatchQueue` worker thread has none. Scheduling one there fires nothing, crashes
-/// nothing and logs nothing — the timer looks installed and every batch silently waits for a
-/// size or lifecycle trigger instead.
-public final class DispatchSourceEventTimer: LNGTDEventPipelineTimer, @unchecked Sendable {
-    private enum State {
-        case suspended
-        case resumed
-        case cancelled
-    }
-
-    private let source: DispatchSourceTimer
-    private let lock = NSLock()
-    private var state: State = .suspended
-
-    public init(interval: TimeInterval, handler: @escaping @Sendable () -> Void) {
-        let queue = DispatchQueue(label: "com.lngtd.sdk.events.timer", qos: .utility)
-        source = DispatchSource.makeTimerSource(queue: queue)
-        source.schedule(deadline: .now() + interval, repeating: interval)
-        source.setEventHandler(handler: handler)
-    }
-
-    public func resume() {
-        lock.lock()
-        defer { lock.unlock() }
-        guard state == .suspended else { return }
-        source.resume()
-        state = .resumed
-    }
-
-    public func suspend() {
-        lock.lock()
-        defer { lock.unlock() }
-        guard state == .resumed else { return }
-        source.suspend()
-        state = .suspended
-    }
-
-    public func cancel() {
-        lock.lock()
-        defer { lock.unlock() }
-        guard state != .cancelled else { return }
-        // Releasing a *suspended* dispatch source traps. Resume it first so the cancel can
-        // take effect, then cancel. This is a crash, not a warning, and it only reproduces on
-        // the path where the app backgrounds and is then torn down without returning.
-        if state == .suspended {
-            source.resume()
-        }
-        source.cancel()
-        state = .cancelled
-    }
-
-    deinit {
-        cancel()
-    }
-}
-
-public struct DefaultEventTimerFactory: LNGTDEventPipelineTimerFactory {
-    public init() {}
-
-    public func makeTimer(
-        interval: TimeInterval, handler: @escaping @Sendable () -> Void
-    ) -> LNGTDEventPipelineTimer {
-        DispatchSourceEventTimer(interval: interval, handler: handler)
-    }
-}
-
 /// Releases a background task token exactly once, from whichever of the two paths arrives
 /// first: the drain finishing, or the system's expiration handler.
 ///
@@ -180,6 +99,9 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
     /// only because `Details.deviceType` has no default and the macOS host cannot know.
     private let deviceType: LNGTDDeviceType
 
+    private let metadata: @Sendable () -> LNGTDDeviceMetadata?
+    private let configVersion: @Sendable () -> String?
+
     private let backgroundHost: LNGTDBackgroundTaskHost?
     private let timerFactory: LNGTDEventPipelineTimerFactory
     private let tickInterval: TimeInterval
@@ -215,6 +137,8 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
         backgroundHost: LNGTDBackgroundTaskHost?,
         session: LNGTDSession = LNGTDSession(),
         isSampled: @escaping @Sendable () -> Bool,
+        metadata: @escaping @Sendable () -> LNGTDDeviceMetadata? = { nil },
+        configVersion: @escaping @Sendable () -> String? = { nil },
         deviceType: LNGTDDeviceType = .phone,
         tickInterval: TimeInterval = 1.0,
         clock: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
@@ -226,6 +150,8 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
         self.session = session
         self.tickInterval = tickInterval
         self.timerFactory = timerFactory
+        self.metadata = metadata
+        self.configVersion = configVersion
 
         let sink = LNGTDDurableEventSink(store: store, transport: transport)
         self.sink = sink
@@ -237,10 +163,21 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
     public func trackScreenView(_ name: String) {
         // One snapshot, so the event cannot mix one screen's name with another's depth.
         let state = session.trackScreenView(name)
+        let meta = metadata()
 
         let custom = LNGTDEventCustomDetails(
             platform: .ios,
+            appBundle: meta?.appBundle,
+            appVersion: meta?.appVersion,
+            sdkVersion: LNGTDSDKVersion,
+            osVersion: meta?.osVersion,
+            deviceModel: meta?.deviceModel,
+            ifa: meta?.ifa,
+            ifaType: meta?.ifaType,
+            attStatus: meta?.attStatus,
+            connection: nil, // 2e-8
             sessionId: state.sessionId,
+            configVersion: configVersion(),
             pageviewId: state.pageviewId
         )
 

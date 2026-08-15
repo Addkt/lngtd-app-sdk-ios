@@ -23,6 +23,25 @@ private final class ConfigRateBox: @unchecked Sendable {
     }
 }
 
+private final class ConfigVersionBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _version: String?
+
+    init(version: String?) {
+        self._version = version
+    }
+
+    var version: String? {
+        lock.lock(); defer { lock.unlock() }
+        return _version
+    }
+
+    func update(version: String?) {
+        lock.lock(); defer { lock.unlock() }
+        self._version = version
+    }
+}
+
 /// The publisher-facing entry point. Replaces `MobileAds.shared.start()`.
 ///
 /// A thin forwarder over `LongitudeEngine`, which holds the actual logic and is
@@ -36,6 +55,15 @@ public enum Longitude {
     private static var observer: LNGTDLifecycleObserver?
     private static var startCalled = false
     private static let samplingSalt = "LNGTDSample"
+
+    private static var metadataProvider: LNGTDDeviceMetadataProvider?
+    private static var metadataBox: LNGTDDeviceMetadataBox?
+
+    /// Refreshes device metadata (e.g. after the ATT prompt resolves).
+    public static func refreshDeviceMetadata() {
+        guard let provider = metadataProvider, let box = metadataBox else { return }
+        box.update(metadata: provider.currentMetadata())
+    }
 
     /// Starts the SDK. **Never blocks.**
     ///
@@ -60,16 +88,23 @@ public enum Longitude {
         }
         startCalled = true
 
+        let provider = DefaultDeviceMetadataProvider()
+        metadataProvider = provider
+        let box = LNGTDDeviceMetadataBox(metadata: provider.currentMetadata())
+        metadataBox = box
+
         let store = configuration.makeStore(account: accountId, section: section)
         let created = LongitudeEngine(store: store, section: section)
         engine = created
 
         let bundledConfig = BundledConfigLoader().load()
         let rateBox = ConfigRateBox(rate: bundledConfig?.config.account?.sampleRate)
+        let versionBox = ConfigVersionBox(version: bundledConfig?.config.version)
 
         Task {
-            await store.setOnSampleRateUpdate { rate in
-                rateBox.update(rate: rate)
+            await store.setOnConfigUpdate { observation in
+                rateBox.update(rate: observation.sampleRate)
+                versionBox.update(version: observation.version)
             }
         }
 
@@ -98,6 +133,8 @@ public enum Longitude {
             // A nil rate means no config has ever carried one. 1.0 is the deliberate direction:
             // over-sending is recoverable, under-sending silently deletes reporting.
             isSampled: { session.isSampled(sampler: sampler, sampleRate: rateBox.rate ?? 1.0) },
+            metadata: { box.metadata },
+            configVersion: { versionBox.version },
             deviceType: UIDevice.current.userInterfaceIdiom == .pad ? .tablet : .phone,
             tickInterval: configuration.tickInterval
         )
@@ -160,6 +197,11 @@ public enum Longitude {
     public static func pipelineDiagnostics() async -> LNGTDEventPipeline.Diagnostics? {
         guard let pipeline else { return nil }
         return await pipeline.diagnostics()
+    }
+
+    /// Metadata state for the debug overlay. Nil before `start`.
+    public static func metadataDiagnostics() -> LNGTDDeviceMetadata? {
+        return metadataBox?.metadata
     }
 }
 

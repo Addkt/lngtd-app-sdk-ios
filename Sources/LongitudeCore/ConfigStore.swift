@@ -22,6 +22,17 @@ public protocol ConfigStoreReporting: AnyObject, Sendable {
     func storeDidFlagStale()
 }
 
+/// What a newly-resolved config carries for the parts of the SDK that cannot await an actor.
+public struct ConfigObservation: Sendable {
+    public let sampleRate: Double?
+    public let version: String?
+
+    public init(sampleRate: Double?, version: String?) {
+        self.sampleRate = sampleRate
+        self.version = version
+    }
+}
+
 public actor ConfigStore {
     private let account: String
     private let section: String
@@ -46,16 +57,21 @@ public actor ConfigStore {
     /// actor: the rate has to be pushed into a lock-guarded box the gate can read without
     /// awaiting. The closure must not call back into this store — it runs inside actor context,
     /// and re-entering from here is a deadlock.
-    private var onSampleRateUpdate: (@Sendable (Double?) -> Void)?
+    private var onConfigUpdate: (@Sendable (ConfigObservation) -> Void)?
 
-    public func setOnSampleRateUpdate(_ closure: @escaping @Sendable (Double?) -> Void) {
-        onSampleRateUpdate = closure
+    /// One observer carrying everything the synchronous event path needs, rather than a
+    /// closure per field: two setters can be half-wired, and the caller that forgets the
+    /// second gets a nil column with nothing erroring.
+    public func setOnConfigUpdate(_ closure: @escaping @Sendable (ConfigObservation) -> Void) {
+        onConfigUpdate = closure
     }
 
     /// Takes an optional so callers do not need an `if let`, which is what pushed
     /// `handleFetchOutcome` past the cyclomatic complexity limit.
-    private func notifySampleRate(of config: AppConfig?) {
-        onSampleRateUpdate?(config?.account?.sampleRate)
+    private func notifyConfigUpdates(of config: AppConfig?) {
+        onConfigUpdate?(
+            ConfigObservation(sampleRate: config?.account?.sampleRate, version: config?.version)
+        )
     }
 
     public private(set) var passthroughReason: ConfigStorePassthroughReason?
@@ -293,7 +309,7 @@ public actor ConfigStore {
                 memoryConfig = config
                 memoryRecord = record
                 isMemoryBundled = false
-                notifySampleRate(of: config)
+                notifyConfigUpdates(of: config)
                 return (LocalResolution(config: config, record: record, freshness: freshness), nil)
             } catch AppConfig.AppConfigError.unsupportedSchema {
                 return (nil, .unsupportedSchemaOrPlatform)
@@ -309,7 +325,7 @@ public actor ConfigStore {
             memoryConfig = bundled.config
             memoryRecord = nil
             isMemoryBundled = true
-            notifySampleRate(of: bundled.config)
+            notifyConfigUpdates(of: bundled.config)
             return (LocalResolution(config: bundled.config, record: nil, freshness: bundled.freshness), nil)
         }
 
@@ -334,7 +350,7 @@ public actor ConfigStore {
                 }
                 clearPassthrough()
                 let validConfig = validated(config)
-                notifySampleRate(of: validConfig)
+                notifyConfigUpdates(of: validConfig)
                 return validConfig
             } catch AppConfig.AppConfigError.unsupportedSchema {
                 reportPassthrough(reason: .unsupportedSchemaOrPlatform)

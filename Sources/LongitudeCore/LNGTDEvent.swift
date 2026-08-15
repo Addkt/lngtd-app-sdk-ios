@@ -76,8 +76,15 @@ public struct LNGTDEventCustomDetails: Encodable, Sendable {
         self.sdkVersion = sdkVersion
         self.osVersion = osVersion
         self.deviceModel = deviceModel
-        self.ifa = ifa
-        self.ifaType = ifaType
+
+        if ifa == "00000000-0000-0000-0000-000000000000" {
+            self.ifa = nil
+            self.ifaType = nil
+        } else {
+            self.ifa = ifa
+            self.ifaType = (ifa == nil) ? nil : ifaType
+        }
+
         self.attStatus = attStatus
         self.connection = connection
         self.sessionId = sessionId
