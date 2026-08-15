@@ -128,6 +128,8 @@ final class DebugViewController: UIViewController {
                 lines.append("last trigger           \(pipeline.lastTrigger?.rawValue ?? "—")")
                 lines.append("bg task active         \(pipeline.isBackgroundTaskActive)")
                 lines.append("event endpoint         \(DemoMetrics.shared.eventEndpoint)")
+                lines.append("route                  \(Longitude.metadataDiagnostics()?.ifa != nil ? "tracking" : "non-tracking")")
+                lines.append("connection             \(pipeline.connection ?? "none")")
             }
 
             if let meta = Longitude.metadataDiagnostics() {

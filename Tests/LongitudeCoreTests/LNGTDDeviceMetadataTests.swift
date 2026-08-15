@@ -11,7 +11,7 @@ final class MetadataFakeTransport: LNGTDEventTransport, @unchecked Sendable {
         return storedPayloads
     }
 
-    func send(payload: Data) async -> LNGTDEventTransportResult {
+    func send(payload: Data, endpoint: LNGTDEndpoint) async -> LNGTDEventTransportResult {
         lock.lock()
         storedPayloads.append(payload)
         lock.unlock()

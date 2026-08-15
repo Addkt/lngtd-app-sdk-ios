@@ -27,18 +27,24 @@ public struct LongitudeConfiguration {
     /// test meant to avoid touching the live collector posts to it.
     public var eventFallbackURL: URL
 
+    /// The endpoint for payloads lacking an identifier. Configurable for the same reason
+    /// as the primary.
+    public var eventNonTrackingURL: URL
+
     public init(
         cacheDirectory: URL? = nil,
         configTimeout: TimeInterval = 1.5,
         tickInterval: TimeInterval = 1.0,
         eventAPIURL: URL = URLSessionEventTransport.defaultPrimaryURL,
-        eventFallbackURL: URL = URLSessionEventTransport.defaultFallbackURL
+        eventFallbackURL: URL = URLSessionEventTransport.defaultFallbackURL,
+        eventNonTrackingURL: URL = URLSessionEventTransport.defaultNonTrackingURL
     ) {
         self.cacheDirectory = cacheDirectory ?? Self.defaultCacheDirectory()
         self.configTimeout = configTimeout
         self.tickInterval = tickInterval
         self.eventAPIURL = eventAPIURL
         self.eventFallbackURL = eventFallbackURL
+        self.eventNonTrackingURL = eventNonTrackingURL
     }
 
     /// `Library/Caches/com.lngtd.sdk/config/`, resolved through FileManager rather than

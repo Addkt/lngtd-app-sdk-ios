@@ -127,7 +127,7 @@ final class LNGTDEventTransportTests: XCTestCase {
     func test01_ThePrimaryRequestCarriesTheRequiredMethodAndHeaders() async {
         MockURLProtocol.reset(outcomes: [.status(200)])
 
-        _ = await transport.send(payload: payload)
+        _ = await transport.send(payload: payload, endpoint: .tracking)
 
         XCTAssertEqual(MockURLProtocol.captures.count, 1)
         let request = MockURLProtocol.captures[0]
@@ -144,7 +144,7 @@ final class LNGTDEventTransportTests: XCTestCase {
     func test02_TheRequestBodyIsThePayloadVerbatim() async {
         MockURLProtocol.reset(outcomes: [.status(200)])
 
-        _ = await transport.send(payload: payload)
+        _ = await transport.send(payload: payload, endpoint: .tracking)
 
         XCTAssertEqual(MockURLProtocol.captures.map(\.body), [payload])
     }
@@ -153,7 +153,7 @@ final class LNGTDEventTransportTests: XCTestCase {
     func test03_A200DoesNotFallBack() async {
         MockURLProtocol.reset(outcomes: [.status(200)])
 
-        let result = await transport.send(payload: payload)
+        let result = await transport.send(payload: payload, endpoint: .tracking)
 
         XCTAssertEqual(result, .success)
         XCTAssertEqual(MockURLProtocol.captures.map(\.url), ["https://ld.lngtd.com/"])
@@ -163,7 +163,7 @@ final class LNGTDEventTransportTests: XCTestCase {
     func test04_A500FallsBackOnceWithTheSameBody() async {
         MockURLProtocol.reset(outcomes: [.status(500), .status(200)])
 
-        let result = await transport.send(payload: payload)
+        let result = await transport.send(payload: payload, endpoint: .tracking)
 
         XCTAssertEqual(result, .success)
         XCTAssertEqual(
@@ -177,11 +177,11 @@ final class LNGTDEventTransportTests: XCTestCase {
     // 5.
     func test05_TheFallbackBoundaryIs500() async {
         MockURLProtocol.reset(outcomes: [.status(499)])
-        _ = await transport.send(payload: payload)
+        _ = await transport.send(payload: payload, endpoint: .tracking)
         XCTAssertEqual(MockURLProtocol.captures.count, 1, "499 is a 4xx: final, no fallback")
 
         MockURLProtocol.reset(outcomes: [.status(500), .status(200)])
-        _ = await transport.send(payload: payload)
+        _ = await transport.send(payload: payload, endpoint: .tracking)
         XCTAssertEqual(MockURLProtocol.captures.count, 2, "500 is the first fallback-eligible status")
     }
 
@@ -189,7 +189,7 @@ final class LNGTDEventTransportTests: XCTestCase {
     func test06_A404DoesNotFallBack() async {
         MockURLProtocol.reset(outcomes: [.status(404)])
 
-        let result = await transport.send(payload: payload)
+        let result = await transport.send(payload: payload, endpoint: .tracking)
 
         XCTAssertEqual(result, .rejected, "a rejected payload will be rejected again")
         XCTAssertEqual(MockURLProtocol.captures.count, 1)
@@ -199,7 +199,7 @@ final class LNGTDEventTransportTests: XCTestCase {
     func test07_A429DoesNotFallBackDespiteTheConvention() async {
         MockURLProtocol.reset(outcomes: [.status(429)])
 
-        let result = await transport.send(payload: payload)
+        let result = await transport.send(payload: payload, endpoint: .tracking)
 
         XCTAssertEqual(result, .rejected)
         XCTAssertEqual(
@@ -212,7 +212,7 @@ final class LNGTDEventTransportTests: XCTestCase {
     func test08_AConnectionThatNeverCompletedFallsBack() async {
         MockURLProtocol.reset(outcomes: [.failure(.notConnectedToInternet), .status(200)])
 
-        let result = await transport.send(payload: payload)
+        let result = await transport.send(payload: payload, endpoint: .tracking)
 
         XCTAssertEqual(result, .success)
         XCTAssertEqual(
@@ -226,7 +226,7 @@ final class LNGTDEventTransportTests: XCTestCase {
     func test09_ACancelledRequestDoesNotFallBack() async {
         MockURLProtocol.reset(outcomes: [.failure(.cancelled)])
 
-        let result = await transport.send(payload: payload)
+        let result = await transport.send(payload: payload, endpoint: .tracking)
 
         XCTAssertEqual(result, .failed)
         XCTAssertEqual(
@@ -240,7 +240,7 @@ final class LNGTDEventTransportTests: XCTestCase {
     func test10_AFailingFallbackIsNotRetried() async {
         MockURLProtocol.reset(outcomes: [.status(500), .status(500)])
 
-        let result = await transport.send(payload: payload)
+        let result = await transport.send(payload: payload, endpoint: .tracking)
 
         XCTAssertEqual(result, .failed)
         XCTAssertEqual(MockURLProtocol.captures.count, 2, "fire the fallback once, then stop")
@@ -253,7 +253,7 @@ final class LNGTDEventTransportTests: XCTestCase {
             responseBody: Data("<html>not json at all".utf8)
         )
 
-        let result = await transport.send(payload: payload)
+        let result = await transport.send(payload: payload, endpoint: .tracking)
 
         XCTAssertEqual(
             result, .success,

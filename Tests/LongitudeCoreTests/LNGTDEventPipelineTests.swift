@@ -9,7 +9,7 @@ final class PipelineFakeTransport: LNGTDEventTransport, @unchecked Sendable {
     var isPaused = false
     private var continuations: [CheckedContinuation<Void, Never>] = []
 
-    func send(payload: Data) async -> LNGTDEventTransportResult {
+    func send(payload: Data, endpoint: LNGTDEndpoint) async -> LNGTDEventTransportResult {
         let shouldPause: Bool
         let resultToReturn: LNGTDEventTransportResult
 

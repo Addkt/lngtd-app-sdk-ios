@@ -86,6 +86,7 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
         public let page: String?
         public let referrer: String?
         public let isSampled: Bool?
+        public let connection: String?
     }
 
     public let queue: LNGTDEventQueue
@@ -101,6 +102,7 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
 
     private let metadata: @Sendable () -> LNGTDDeviceMetadata?
     private let configVersion: @Sendable () -> String?
+    private let connection: @Sendable () -> String?
 
     private let backgroundHost: LNGTDBackgroundTaskHost?
     private let timerFactory: LNGTDEventPipelineTimerFactory
@@ -139,6 +141,7 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
         isSampled: @escaping @Sendable () -> Bool,
         metadata: @escaping @Sendable () -> LNGTDDeviceMetadata? = { nil },
         configVersion: @escaping @Sendable () -> String? = { nil },
+        connection: @escaping @Sendable () -> String? = { nil },
         deviceType: LNGTDDeviceType = .phone,
         tickInterval: TimeInterval = 1.0,
         clock: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
@@ -152,6 +155,7 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
         self.timerFactory = timerFactory
         self.metadata = metadata
         self.configVersion = configVersion
+        self.connection = connection
 
         let sink = LNGTDDurableEventSink(store: store, transport: transport)
         self.sink = sink
@@ -175,7 +179,7 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
             ifa: meta?.ifa,
             ifaType: meta?.ifaType,
             attStatus: meta?.attStatus,
-            connection: nil, // 2e-8
+            connection: connection(),
             sessionId: state.sessionId,
             configVersion: configVersion(),
             pageviewId: state.pageviewId
@@ -308,7 +312,8 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
             sessionDepth: session.sessionDepth,
             page: session.page,
             referrer: session.referrer,
-            isSampled: session.isSampledDecision
+            isSampled: session.isSampledDecision,
+            connection: connection()
         )
     }
 

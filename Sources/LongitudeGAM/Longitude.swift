@@ -59,6 +59,8 @@ public enum Longitude {
     private static var metadataProvider: LNGTDDeviceMetadataProvider?
     private static var metadataBox: LNGTDDeviceMetadataBox?
 
+    private static var connectionMonitor: LNGTDConnectionMonitor?
+
     /// Refreshes device metadata (e.g. after the ATT prompt resolves).
     public static func refreshDeviceMetadata() {
         guard let provider = metadataProvider, let box = metadataBox else { return }
@@ -117,13 +119,17 @@ public enum Longitude {
         let eventStore = LNGTDEventStore(baseDirectory: eventStoreDir)
         let transport = URLSessionEventTransport(
             primaryURL: configuration.eventAPIURL,
-            fallbackURL: configuration.eventFallbackURL
+            fallbackURL: configuration.eventFallbackURL,
+            nonTrackingURL: configuration.eventNonTrackingURL
         )
 
         let session = LNGTDSession()
         // A constant salt, not publisher-supplied: a publisher-chosen salt would make two apps'
         // sampling correlated or anticorrelated for no benefit.
         let sampler = LNGTDSampler(salt: Self.samplingSalt)
+
+        let connectionMon = DefaultConnectionMonitor()
+        connectionMonitor = connectionMon
 
         let createdPipeline = LNGTDEventPipeline(
             store: eventStore,
@@ -135,6 +141,7 @@ public enum Longitude {
             isSampled: { session.isSampled(sampler: sampler, sampleRate: rateBox.rate ?? 1.0) },
             metadata: { box.metadata },
             configVersion: { versionBox.version },
+            connection: { connectionMon.currentConnection() },
             deviceType: UIDevice.current.userInterfaceIdiom == .pad ? .tablet : .phone,
             tickInterval: configuration.tickInterval
         )

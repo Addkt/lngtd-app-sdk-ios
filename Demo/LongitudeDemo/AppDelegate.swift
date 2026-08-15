@@ -30,6 +30,14 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
             // Point the fallback at the same place, or a refused primary falls through to
             // production it.lngtd.com and the failure test posts real rows.
             configuration.eventFallbackURL = url
+            // And the non-tracking endpoint, or every ATT-denied event still goes to production
+            // notrack.lngtd.com while the overlay shows a local endpoint. Overridable separately
+            // so a reviewer can point the two at different ports and watch the split.
+            configuration.eventNonTrackingURL = url
+            if let notrack = UserDefaults.standard.string(forKey: "eventNonTrackingURL"),
+               let notrackURL = URL(string: notrack) {
+                configuration.eventNonTrackingURL = notrackURL
+            }
             DemoMetrics.shared.eventEndpoint = url.absoluteString
         } else {
             DemoMetrics.shared.eventEndpoint = "default (production)"

@@ -13,8 +13,13 @@ public enum LNGTDEventTransportResult: Sendable, Equatable {
     case failed
 }
 
+public enum LNGTDEndpoint: Sendable, Equatable, Hashable {
+    case tracking
+    case nonTracking
+}
+
 public protocol LNGTDEventTransport: Sendable {
-    func send(payload: Data) async -> LNGTDEventTransportResult
+    func send(payload: Data, endpoint: LNGTDEndpoint) async -> LNGTDEventTransportResult
 }
 
 public let LNGTDSDKVersion = "ios/1.0.0"
@@ -28,27 +33,35 @@ public final class URLSessionEventTransport: LNGTDEventTransport {
     public static let defaultFallbackURL = URL(
         string: "https://it.lngtd.com/"
     ) ?? URL(fileURLWithPath: "/")
+    public static let defaultNonTrackingURL = URL(
+        string: "https://notrack.lngtd.com/"
+    ) ?? URL(fileURLWithPath: "/")
 
     private let session: URLSession
     private let primaryURL: URL
     private let fallbackURL: URL
+    private let nonTrackingURL: URL
     private let sdkVersion: String
 
     public init(
         session: URLSession = .shared,
         primaryURL: URL = URLSessionEventTransport.defaultPrimaryURL,
         fallbackURL: URL = URLSessionEventTransport.defaultFallbackURL,
+        nonTrackingURL: URL = URLSessionEventTransport.defaultNonTrackingURL,
         sdkVersion: String = LNGTDSDKVersion
     ) {
         self.session = session
         self.primaryURL = primaryURL
         self.fallbackURL = fallbackURL
+        self.nonTrackingURL = nonTrackingURL
         self.sdkVersion = sdkVersion
     }
 
-    public func send(payload: Data) async -> LNGTDEventTransportResult {
+    public func send(payload: Data, endpoint: LNGTDEndpoint) async -> LNGTDEventTransportResult {
+        let targetURL = endpoint == .tracking ? primaryURL : nonTrackingURL
+
         do {
-            let (status, error) = try await performRequest(url: primaryURL, payload: payload)
+            let (status, error) = try await performRequest(url: targetURL, payload: payload)
             if let status = status {
                 if status >= 200 && status < 300 { return .success }
                 if status >= 400 && status < 500 { return .rejected }
@@ -63,14 +76,19 @@ public final class URLSessionEventTransport: LNGTDEventTransport {
         }
 
         // Fallback
-        do {
-            let (status, _) = try await performRequest(url: fallbackURL, payload: payload)
-            if let status = status {
-                if status >= 200 && status < 300 { return .success }
-                if status >= 400 && status < 500 { return .rejected }
+        if endpoint == .tracking {
+            do {
+                let (status, _) = try await performRequest(url: fallbackURL, payload: payload)
+                if let status = status {
+                    if status >= 200 && status < 300 { return .success }
+                    if status >= 400 && status < 500 { return .rejected }
+                }
+            } catch {
+                // Ignored, return .failed
             }
-        } catch {
-            // Ignored, return .failed
+        } else {
+            // The non-tracking path intentionally has no fallback. `it.lngtd.com` is a listed
+            // tracking domain and would be blocked.
         }
 
         return .failed

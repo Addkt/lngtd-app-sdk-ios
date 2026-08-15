@@ -43,87 +43,113 @@ public actor LNGTDDurableEventSink: LNGTDEventSink {
         guard let lines = encode(payload) else { return }
 
         // 1. Disk first, before the POST — not on failure.
-        //
-        // The window persistence exists to cover is the app being killed *during* the send,
-        // and only a write that already happened covers it. One append per batch on a
-        // healthy network is the price; do not "optimise" this to write-only-on-failure.
         store.append(lines: lines)
 
-        let body: Data
         switch payload {
-        case .single:
-            // Still bare-object shaped on the live path; only a persisted-and-drained
-            // immediate event changes shape. See `drain()`.
-            body = lines[0]
-        case .batch:
-            body = Self.assemble(lines)
-        }
+        case .single(let event):
+            let isTracking = event.details.custom.ifa != nil
+            await deliver(body: lines[0], claiming: lines, endpoint: isTracking ? .tracking : .nonTracking)
+        case .batch(let events):
+            var trackingLines: [Data] = []
+            var nonTrackingLines: [Data] = []
 
-        // 2. POST. 3. Remove on a delivered outcome. 4. Leave it on a failure.
-        await deliver(body: body, claiming: lines)
+            for (index, event) in events.enumerated() {
+                if event.details.custom.ifa != nil {
+                    trackingLines.append(lines[index])
+                } else {
+                    nonTrackingLines.append(lines[index])
+                }
+            }
+
+            if !trackingLines.isEmpty {
+                await deliver(body: Self.assemble(trackingLines), claiming: trackingLines, endpoint: .tracking)
+            }
+            if !nonTrackingLines.isEmpty {
+                await deliver(body: Self.assemble(nonTrackingLines), claiming: nonTrackingLines, endpoint: .nonTracking)
+            }
+        }
     }
 
     // MARK: - Drain
 
-    /// Sends everything on disk. Called at launch, and by 2e-5 on backgrounding.
-    ///
-    /// A persisted immediate event is, by definition, no longer immediate, so it is re-sent
-    /// inside an array with everything else rather than tagging lines to preserve its
-    /// bare-object shape. The collector accepts an array either way; the shape change is a
-    /// decision, not an accident.
+    /// Accumulates one endpoint's batch. `stopped` is per group on purpose — see `drain()`.
+    private struct DrainGroup {
+        var lines: [Data] = []
+        var elementBytes = 0
+        var stopped = false
+    }
+
     public func drain() async {
         let stored = store.readAll()
         guard !stored.isEmpty else { return }
 
-        var batch: [Data] = []
-        var batchElementBytes = 0
+        var groups: [LNGTDEndpoint: DrainGroup] = [.tracking: DrainGroup(), .nonTracking: DrainGroup()]
 
         for line in stored {
-            // A line that cannot fit a payload on its own would otherwise be assembled into
-            // an over-cap POST — the exact outcome 2e-3's oversized guard rejects. Such a
-            // line can only reach disk from an older build, so drop it rather than letting
-            // the two layers disagree.
             if Self.payloadBytes(count: 1, elementBytes: line.count) > maxPayloadBytes {
                 reporter?.eventQueueDidDrop(.oversized)
                 store.remove(records: [line])
                 continue
             }
 
-            let wouldExceed = batch.count + 1 > maxBatchSize
+            // From the line's own bytes, never from the current ATT status: a record persisted
+            // while authorised drains on a later launch that may have revoked, and vice versa.
+            let endpoint: LNGTDEndpoint = Self.hasIfa(in: line) ? .tracking : .nonTracking
+            guard var group = groups[endpoint], !group.stopped else { continue }
+
+            let wouldExceed = group.lines.count + 1 > maxBatchSize
                 || Self.payloadBytes(
-                    count: batch.count + 1,
-                    elementBytes: batchElementBytes + line.count
+                    count: group.lines.count + 1,
+                    elementBytes: group.elementBytes + line.count
                 ) > maxPayloadBytes
 
             if wouldExceed {
-                // Stop at the first failure. If the connection is down, the remaining
-                // batches are equally doomed, and firing them costs a metered connection
-                // real bytes for a guaranteed rejection. They stay on disk for next time.
-                guard await deliver(body: Self.assemble(batch), claiming: batch) else { return }
-                batch = [line]
-                batchElementBytes = line.count
+                // Stop only THIS endpoint on failure. 2e-4 stopped the whole drain, reasoning
+                // that a dead connection dooms every remaining batch — which stopped being true
+                // the moment there were two endpoints. `ld.lngtd.com` is blocked outright for an
+                // ATT-denied user, so one stale tracking record would otherwise abort the drain
+                // before a single non-tracking event went out: exactly what this endpoint exists
+                // to deliver.
+                if await deliver(
+                    body: Self.assemble(group.lines), claiming: group.lines, endpoint: endpoint
+                ) {
+                    group.lines = [line]
+                    group.elementBytes = line.count
+                } else {
+                    group.stopped = true
+                }
             } else {
-                batch.append(line)
-                batchElementBytes += line.count
+                group.lines.append(line)
+                group.elementBytes += line.count
             }
+            groups[endpoint] = group
         }
 
-        if !batch.isEmpty {
-            _ = await deliver(body: Self.assemble(batch), claiming: batch)
+        for endpoint in [LNGTDEndpoint.tracking, .nonTracking] {
+            guard let group = groups[endpoint], !group.stopped, !group.lines.isEmpty else { continue }
+            _ = await deliver(
+                body: Self.assemble(group.lines), claiming: group.lines, endpoint: endpoint
+            )
         }
     }
 
     // MARK: - Private
 
+    private static func hasIfa(in line: Data) -> Bool {
+        guard let object = (try? JSONSerialization.jsonObject(with: line)) as? [String: Any],
+              let details = object["details"] as? [String: Any],
+              let customJSON = details["custom"] as? String,
+              let custom = (try? JSONSerialization.jsonObject(with: Data(customJSON.utf8))) as? [String: Any] else {
+            return false
+        }
+        return custom["ifa"] != nil
+    }
+
     /// Returns false when the records were left on disk for a later attempt.
     @discardableResult
-    private func deliver(body: Data, claiming lines: [Data]) async -> Bool {
-        switch await transport.send(payload: body) {
+    private func deliver(body: Data, claiming lines: [Data], endpoint: LNGTDEndpoint) async -> Bool {
+        switch await transport.send(payload: body, endpoint: endpoint) {
         case .success, .rejected:
-            // A 4xx is removed as well as a 2xx. It is not a success, but it will be
-            // rejected again: retaining it would re-POST a permanently refused payload on
-            // every launch while the file grew without bound. 2e-3's oversized guard exists
-            // to keep a 413 out of this path, and the two decisions have to agree.
             store.remove(records: lines)
             return true
         case .failed:
