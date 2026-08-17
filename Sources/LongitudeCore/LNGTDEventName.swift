@@ -35,9 +35,15 @@ public struct LNGTDEventName: RawRepresentable, Equatable, Hashable, Sendable, C
     public static let attStatusChange = LNGTDEventName(rawValue: "att_status_change")
     public static let slotLazyDeferred = LNGTDEventName(rawValue: "slot_lazy_deferred")
 
+    // Auction events
+    public static let bid = LNGTDEventName(rawValue: "bid")
+    public static let bidBelowFloor = LNGTDEventName(rawValue: "bid_below_floor")
+    /// Partial support: we can drop Prebid targeting on a blocked creative but cannot block a GAM-rendered one.
+    public static let blockedBid = LNGTDEventName(rawValue: "blocked_bid")
+
     // The following events are omitted by design:
     // - missing_adapter: Prebid.js concept, not applicable for S2S.
-    // - blocked_bid, video_impression: partial (can drop targeting but cannot block GAM-rendered).
+    // - video_impression: partial.
     // - vast_error: no analogue on GAM-rendered path, deferred to Rendering API.
     // - content_start, content_stalled, player_close: needs publisher content player, deferred to manual API.
 
@@ -65,6 +71,7 @@ public struct LNGTDEventName: RawRepresentable, Equatable, Hashable, Sendable, C
         .paidEvent, .adClick, .sdkInit, .appForeground, .appBackground,
         .fullscreenPresent, .fullscreenDismiss, .fullscreenPresentFailure,
         .rewardEarned, .attStatusChange, .slotLazyDeferred,
+        .bid, .bidBelowFloor, .blockedBid
     ]
 
     public var isKnown: Bool {
