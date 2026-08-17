@@ -96,6 +96,17 @@ public final class LNGTDSession: @unchecked Sendable {
         public let referrer: String?
     }
 
+    public func currentSnapshot() -> Snapshot {
+        lock.lock(); defer { lock.unlock() }
+        return Snapshot(
+            sessionId: _sessionId,
+            sessionDepth: _sessionDepth,
+            pageviewId: _pageviewId,
+            page: _page,
+            referrer: _referrer
+        )
+    }
+
     @discardableResult
     public func trackScreenView(_ name: String) -> Snapshot {
         lock.lock(); defer { lock.unlock() }

@@ -165,6 +165,15 @@ final class DebugViewController: UIViewController {
                 lines.append("resolving…")
             }
 
+            if let probeBanner = probeBanner, let observer = Longitude.viewabilityObserver {
+                let state = observer.state(for: probeBanner)
+                lines.append("")
+                lines.append("── viewability (demo_banner) ──")
+                lines.append(String(format: "exposure               %.1f%%", state.exposure * 100))
+                lines.append(String(format: "dwell                  %.1fs", state.dwell))
+                lines.append("fired                  \(state.fired ? "yes" : "no")")
+            }
+
             lines.append("")
             lines.append("── not yet wired ──")
             lines.append("targeting keys         needs LongitudeAuction (M2)")

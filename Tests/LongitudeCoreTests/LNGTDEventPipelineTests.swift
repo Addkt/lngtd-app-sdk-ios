@@ -111,7 +111,11 @@ final class PipelineFakeTimerFactory: LNGTDEventPipelineTimerFactory, @unchecked
     var lastHandler: (() -> Void)?
     var createdCount = 0
 
-    func makeTimer(interval: TimeInterval, handler: @escaping @Sendable () -> Void) -> LNGTDEventPipelineTimer {
+    func makeTimer(
+        interval: TimeInterval,
+        queue: DispatchQueue?,
+        handler: @escaping @Sendable () -> Void
+    ) -> LNGTDEventPipelineTimer {
         createdCount += 1
         lastHandler = handler
         return PipelineFakeTimer(factory: self)

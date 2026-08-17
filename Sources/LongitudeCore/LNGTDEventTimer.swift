@@ -8,7 +8,7 @@ public protocol LNGTDEventPipelineTimer: Sendable {
 
 public protocol LNGTDEventPipelineTimerFactory: Sendable {
     func makeTimer(
-        interval: TimeInterval, handler: @escaping @Sendable () -> Void
+        interval: TimeInterval, queue: DispatchQueue?, handler: @escaping @Sendable () -> Void
     ) -> LNGTDEventPipelineTimer
 }
 
@@ -29,9 +29,9 @@ public final class DispatchSourceEventTimer: LNGTDEventPipelineTimer, @unchecked
     private let lock = NSLock()
     private var state: State = .suspended
 
-    public init(interval: TimeInterval, handler: @escaping @Sendable () -> Void) {
-        let queue = DispatchQueue(label: "com.lngtd.sdk.events.timer", qos: .utility)
-        source = DispatchSource.makeTimerSource(queue: queue)
+    public init(interval: TimeInterval, queue: DispatchQueue? = nil, handler: @escaping @Sendable () -> Void) {
+        let timerQueue = queue ?? DispatchQueue(label: "com.lngtd.sdk.events.timer", qos: .utility)
+        source = DispatchSource.makeTimerSource(queue: timerQueue)
         source.schedule(deadline: .now() + interval, repeating: interval)
         source.setEventHandler(handler: handler)
     }
@@ -75,8 +75,8 @@ public struct DefaultEventTimerFactory: LNGTDEventPipelineTimerFactory {
     public init() {}
 
     public func makeTimer(
-        interval: TimeInterval, handler: @escaping @Sendable () -> Void
+        interval: TimeInterval, queue: DispatchQueue? = nil, handler: @escaping @Sendable () -> Void
     ) -> LNGTDEventPipelineTimer {
-        DispatchSourceEventTimer(interval: interval, handler: handler)
+        DispatchSourceEventTimer(interval: interval, queue: queue, handler: handler)
     }
 }

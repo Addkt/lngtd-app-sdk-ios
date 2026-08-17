@@ -103,6 +103,7 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
     private let metadata: @Sendable () -> LNGTDDeviceMetadata?
     private let configVersion: @Sendable () -> String?
     private let connection: @Sendable () -> String?
+    private let clock: @Sendable () -> TimeInterval
 
     private let backgroundHost: LNGTDBackgroundTaskHost?
     private let timerFactory: LNGTDEventPipelineTimerFactory
@@ -156,6 +157,7 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
         self.metadata = metadata
         self.configVersion = configVersion
         self.connection = connection
+        self.clock = clock
 
         let sink = LNGTDDurableEventSink(store: store, transport: transport)
         self.sink = sink
@@ -196,6 +198,45 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
         )
 
         let event = LNGTDEvent(event: .pageview, details: details)
+        let queue = self.queue
+        chain { await queue.enqueue(event) }
+    }
+
+    public func trackViewableImpression(unit: String) {
+        let state = session.currentSnapshot()
+        let meta = metadata()
+
+        let custom = LNGTDEventCustomDetails(
+            platform: .ios,
+            appBundle: meta?.appBundle,
+            appVersion: meta?.appVersion,
+            sdkVersion: LNGTDSDKVersion,
+            osVersion: meta?.osVersion,
+            deviceModel: meta?.deviceModel,
+            ifa: meta?.ifa,
+            ifaType: meta?.ifaType,
+            attStatus: meta?.attStatus,
+            connection: connection(),
+            sessionId: state.sessionId,
+            configVersion: configVersion(),
+            pageviewId: state.pageviewId
+        )
+
+        let details = LNGTDEvent.Details(
+            page: state.page,
+            referrerUrl: state.referrer,
+            deviceType: deviceType,
+            unit: unit,
+            sessionDepth: state.sessionDepth,
+            custom: custom
+        )
+
+        let event = LNGTDEvent(
+            event: .viewableImpression,
+            clock: clock,
+            details: details
+        )
+
         let queue = self.queue
         chain { await queue.enqueue(event) }
     }
@@ -407,7 +448,7 @@ public final class LNGTDEventPipeline: @unchecked Sendable {
         }
 
         let queue = self.queue
-        let created = timerFactory.makeTimer(interval: tickInterval) { [weak self] in
+        let created = timerFactory.makeTimer(interval: tickInterval, queue: nil) { [weak self] in
             guard let self else { return }
             self.recordTick()
             self.chain { await queue.tick() }

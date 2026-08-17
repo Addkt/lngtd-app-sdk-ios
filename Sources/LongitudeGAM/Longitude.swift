@@ -53,6 +53,7 @@ public enum Longitude {
     private static var engine: LongitudeEngine?
     private static var pipeline: LNGTDEventPipeline?
     private static var observer: LNGTDLifecycleObserver?
+    public static var viewabilityObserver: LNGTDViewabilityObserver?
     private static var startCalled = false
     private static let samplingSalt = "LNGTDSample"
 
@@ -148,6 +149,14 @@ public enum Longitude {
 
         pipeline = createdPipeline
         observer = LNGTDLifecycleObserver(pipeline: createdPipeline)
+
+        let tracker = LNGTDViewabilityTracker(
+            queue: .main,
+            trackViewableImpression: { [weak createdPipeline] unit in
+                createdPipeline?.trackViewableImpression(unit: unit)
+            }
+        )
+        viewabilityObserver = LNGTDViewabilityObserver(tracker: tracker)
 
         // Kicks the launch drain and installs the flush timer. Non-blocking.
         createdPipeline.start()

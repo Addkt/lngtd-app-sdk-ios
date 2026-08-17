@@ -164,6 +164,13 @@ public final class LNGTDBannerView: UIView {
         }
     }
 
+    public override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        if superview == nil {
+            Longitude.viewabilityObserver?.deregister(view: self)
+        }
+    }
+
     private func applyPlan(_ plan: LongitudeSlotPlan) {
         gamBanner.adUnitID = plan.gamPath
 
@@ -226,6 +233,17 @@ extension LNGTDBannerView: BannerViewDelegate {
     }
 
     public func bannerViewDidRecordImpression(_ bannerView: BannerView) {
+        // Measurement starts HERE, when a creative has actually rendered — not at `load()`.
+        //
+        // Registering at request time means an empty slot accrues dwell and can post a
+        // viewable_impression for a slot that never showed an ad, and then post a second one
+        // when the creative arrives and resets the latch. That reproduced on device exactly
+        // once out of two runs: whether it double-fires depends on whether the ad renders
+        // inside the first second, which is the worst way for an over-reporting bug to behave.
+        //
+        // Registering is also the latch reset: a new creative is a new impression, and
+        // `register` starts the entry at `.idle`.
+        Longitude.viewabilityObserver?.register(view: self, unit: slot)
         delegate?.bannerViewDidRecordImpression(self)
     }
 
