@@ -12,7 +12,7 @@ final class EndpointRoutingFakeTransport: LNGTDEventTransport, @unchecked Sendab
 
     /// Per-endpoint results, so one endpoint can be blocked while the other works. That is not
     /// a hypothetical: iOS blocks `ld.lngtd.com` outright for an ATT-denied user while
-    /// `notrack.lngtd.com` stays reachable, which is the entire reason the second endpoint
+    /// `nt.lngtd.com` stays reachable, which is the entire reason the second endpoint
     /// exists. A double that always succeeds cannot express it.
     var resultsByEndpoint: [LNGTDEndpoint: LNGTDEventTransportResult] = [:]
 
@@ -233,7 +233,7 @@ final class LNGTDEndpointRoutingTests: XCTestCase {
         // I chose to give the non-tracking path no fallback, and it handles failure gracefully inside send().
         // We verify the nonTrackingURL exists.
         let nonTracking = mirror.children.first(where: { $0.label == "nonTrackingURL" })?.value as? URL
-        XCTAssertEqual(nonTracking?.host, "notrack.lngtd.com")
+        XCTAssertEqual(nonTracking?.host, "nt.lngtd.com")
     }
 
     // 9. Regression: a blocked tracking endpoint must not abandon the non-tracking batch.
@@ -241,7 +241,7 @@ final class LNGTDEndpointRoutingTests: XCTestCase {
     // The delivered drain used one `guard await deliver(...) else { return }` for both groups,
     // inheriting 2e-4's reasoning that a dead connection dooms every remaining batch. With two
     // endpoints that is false: iOS blocks ld.lngtd.com outright for an ATT-denied user while
-    // notrack.lngtd.com stays reachable. One stale tracking record on disk would then abort the
+    // nt.lngtd.com stays reachable. One stale tracking record on disk would then abort the
     // drain before a single non-tracking event went out — precisely what this endpoint exists
     // to deliver. No existing test caught it.
     func test09_ABlockedTrackingEndpointDoesNotAbandonNonTrackingEvents() async throws {

@@ -320,5 +320,16 @@ final class LNGTDDeviceMetadataTests: XCTestCase {
             domains.contains("floors.lngtd.com"),
             "the config host is not a tracking domain; listing it blocks config for denied users"
         )
+
+        // Tied to the constant rather than a literal, so renaming the host cannot quietly
+        // break the link. The non-tracking endpoint exists precisely to be reachable when
+        // tracking is denied; listing it here would block it and undo the whole of 2e-8.
+        if let nonTrackingHost = URLSessionEventTransport.defaultNonTrackingURL.host {
+            XCTAssertFalse(
+                domains.contains(nonTrackingHost),
+                "\(nonTrackingHost) must never be a tracking domain — listing it blocks the "
+                + "endpoint that carries events for ATT-denied users"
+            )
+        }
     }
 }

@@ -34,7 +34,7 @@ public final class URLSessionEventTransport: LNGTDEventTransport {
         string: "https://it.lngtd.com/"
     ) ?? URL(fileURLWithPath: "/")
     public static let defaultNonTrackingURL = URL(
-        string: "https://notrack.lngtd.com/"
+        string: "https://nt.lngtd.com/"
     ) ?? URL(fileURLWithPath: "/")
 
     private let session: URLSession
