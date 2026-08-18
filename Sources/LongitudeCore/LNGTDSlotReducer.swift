@@ -35,6 +35,9 @@ public struct LNGTDSlotReducer: Sendable {
 
     private func reduceAwaitingConfig(_ input: LNGTDSlotInput) -> (LNGTDSlotState, [LNGTDSlotEffect]) {
         switch input {
+        case .load:
+            let auctionId = generateAuctionId()
+            return (.resolvingFloor(auctionId: auctionId), [.resolveFloor(auctionId: auctionId)])
         case .configResolved(.longitude(let plan)):
             let auctionId = generateAuctionId()
             return (
@@ -60,6 +63,19 @@ public struct LNGTDSlotReducer: Sendable {
         _ auctionId: String, _ input: LNGTDSlotInput
     ) -> (LNGTDSlotState, [LNGTDSlotEffect]) {
         switch input {
+        case .load:
+            // A publisher-initiated load SUPERSEDES whatever is in flight.
+            //
+            // Deliberately unlike `.refreshDue`, which is an automatic timer and is dropped
+            // mid-auction because Prebid's `baseFetchDemand` has no reentrancy guard. `load()`
+            // is public API a publisher calls on refresh, rotation and cell reuse; ignoring it
+            // means the slot silently never updates. The older auction's result is discarded
+            // instead, because the state has moved to a new auction id by the time it lands.
+            let supersedingId = generateAuctionId()
+            return (
+                .resolvingFloor(auctionId: supersedingId),
+                [.resolveFloor(auctionId: supersedingId)]
+            )
         case .configResolved(.longitude(let plan)):
             return (
                 .auctioning(plan: plan, auctionId: auctionId),
@@ -82,6 +98,19 @@ public struct LNGTDSlotReducer: Sendable {
         _ plan: LongitudeSlotPlan, _ auctionId: String, _ input: LNGTDSlotInput
     ) -> (LNGTDSlotState, [LNGTDSlotEffect]) {
         switch input {
+        case .load:
+            // A publisher-initiated load SUPERSEDES whatever is in flight.
+            //
+            // Deliberately unlike `.refreshDue`, which is an automatic timer and is dropped
+            // mid-auction because Prebid's `baseFetchDemand` has no reentrancy guard. `load()`
+            // is public API a publisher calls on refresh, rotation and cell reuse; ignoring it
+            // means the slot silently never updates. The older auction's result is discarded
+            // instead, because the state has moved to a new auction id by the time it lands.
+            let supersedingId = generateAuctionId()
+            return (
+                .resolvingFloor(auctionId: supersedingId),
+                [.resolveFloor(auctionId: supersedingId)]
+            )
         case .auctionCompleted:
             return (.requestingGAM(plan: plan, auctionId: auctionId), [
                 .emitBid(auctionId: auctionId, late: false),
@@ -112,6 +141,19 @@ public struct LNGTDSlotReducer: Sendable {
         _ plan: LongitudeSlotPlan, _ auctionId: String, _ input: LNGTDSlotInput
     ) -> (LNGTDSlotState, [LNGTDSlotEffect]) {
         switch input {
+        case .load:
+            // A publisher-initiated load SUPERSEDES whatever is in flight.
+            //
+            // Deliberately unlike `.refreshDue`, which is an automatic timer and is dropped
+            // mid-auction because Prebid's `baseFetchDemand` has no reentrancy guard. `load()`
+            // is public API a publisher calls on refresh, rotation and cell reuse; ignoring it
+            // means the slot silently never updates. The older auction's result is discarded
+            // instead, because the state has moved to a new auction id by the time it lands.
+            let supersedingId = generateAuctionId()
+            return (
+                .resolvingFloor(auctionId: supersedingId),
+                [.resolveFloor(auctionId: supersedingId)]
+            )
         case .gamLoaded:
             return (.rendered(plan: plan, auctionId: auctionId), [])
         case .gamFailed:
@@ -146,6 +188,19 @@ public struct LNGTDSlotReducer: Sendable {
         _ plan: LongitudeSlotPlan, _ auctionId: String, _ input: LNGTDSlotInput
     ) -> (LNGTDSlotState, [LNGTDSlotEffect]) {
         switch input {
+        case .load:
+            // A publisher-initiated load SUPERSEDES whatever is in flight.
+            //
+            // Deliberately unlike `.refreshDue`, which is an automatic timer and is dropped
+            // mid-auction because Prebid's `baseFetchDemand` has no reentrancy guard. `load()`
+            // is public API a publisher calls on refresh, rotation and cell reuse; ignoring it
+            // means the slot silently never updates. The older auction's result is discarded
+            // instead, because the state has moved to a new auction id by the time it lands.
+            let supersedingId = generateAuctionId()
+            return (
+                .resolvingFloor(auctionId: supersedingId),
+                [.resolveFloor(auctionId: supersedingId)]
+            )
         case .impressionRecorded:
             return (.impressed(plan: plan, auctionId: auctionId), [])
         case .lateAuctionCompleted(let lateAuctionId):
@@ -168,6 +223,19 @@ public struct LNGTDSlotReducer: Sendable {
         _ plan: LongitudeSlotPlan, _ auctionId: String, _ input: LNGTDSlotInput
     ) -> (LNGTDSlotState, [LNGTDSlotEffect]) {
         switch input {
+        case .load:
+            // A publisher-initiated load SUPERSEDES whatever is in flight.
+            //
+            // Deliberately unlike `.refreshDue`, which is an automatic timer and is dropped
+            // mid-auction because Prebid's `baseFetchDemand` has no reentrancy guard. `load()`
+            // is public API a publisher calls on refresh, rotation and cell reuse; ignoring it
+            // means the slot silently never updates. The older auction's result is discarded
+            // instead, because the state has moved to a new auction id by the time it lands.
+            let supersedingId = generateAuctionId()
+            return (
+                .resolvingFloor(auctionId: supersedingId),
+                [.resolveFloor(auctionId: supersedingId)]
+            )
         case .refreshDue:
             let newAuctionId = generateAuctionId()
             return (.resolvingFloor(auctionId: newAuctionId), [.resolveFloor(auctionId: newAuctionId)])
@@ -188,6 +256,19 @@ public struct LNGTDSlotReducer: Sendable {
         _ failure: LNGTDSlotFailure, _ input: LNGTDSlotInput
     ) -> (LNGTDSlotState, [LNGTDSlotEffect]) {
         switch input {
+        case .load:
+            // A publisher-initiated load SUPERSEDES whatever is in flight.
+            //
+            // Deliberately unlike `.refreshDue`, which is an automatic timer and is dropped
+            // mid-auction because Prebid's `baseFetchDemand` has no reentrancy guard. `load()`
+            // is public API a publisher calls on refresh, rotation and cell reuse; ignoring it
+            // means the slot silently never updates. The older auction's result is discarded
+            // instead, because the state has moved to a new auction id by the time it lands.
+            let supersedingId = generateAuctionId()
+            return (
+                .resolvingFloor(auctionId: supersedingId),
+                [.resolveFloor(auctionId: supersedingId)]
+            )
         case .lateAuctionCompleted(let lateAuctionId):
             return (.failed(failure), [.emitBid(auctionId: lateAuctionId, late: true)])
         case .teardown:
@@ -205,6 +286,19 @@ public struct LNGTDSlotReducer: Sendable {
         _ cause: PassthroughCause, _ input: LNGTDSlotInput
     ) -> (LNGTDSlotState, [LNGTDSlotEffect]) {
         switch input {
+        case .load:
+            // A publisher-initiated load SUPERSEDES whatever is in flight.
+            //
+            // Deliberately unlike `.refreshDue`, which is an automatic timer and is dropped
+            // mid-auction because Prebid's `baseFetchDemand` has no reentrancy guard. `load()`
+            // is public API a publisher calls on refresh, rotation and cell reuse; ignoring it
+            // means the slot silently never updates. The older auction's result is discarded
+            // instead, because the state has moved to a new auction id by the time it lands.
+            let supersedingId = generateAuctionId()
+            return (
+                .resolvingFloor(auctionId: supersedingId),
+                [.resolveFloor(auctionId: supersedingId)]
+            )
         case .lateAuctionCompleted(let lateAuctionId):
             return (.passthrough(cause), [.emitBid(auctionId: lateAuctionId, late: true)])
         case .teardown:

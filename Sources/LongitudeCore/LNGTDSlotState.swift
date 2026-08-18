@@ -26,6 +26,7 @@ public enum LNGTDSlotState: Equatable, Sendable {
 }
 
 public enum LNGTDSlotInput: Equatable, Sendable {
+    case load
     case configResolved(SlotResolution)
     case auctionCompleted
     case auctionTimedOut
