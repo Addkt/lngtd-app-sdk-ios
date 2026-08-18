@@ -56,6 +56,13 @@ let package = Package(
         // What a publisher adds. LongitudeGAM re-exports the core, so one product is
         // the whole SDK as far as an integration is concerned.
         .library(name: "LongitudeGAM", targets: ["LongitudeGAM"]),
+        // Not something a publisher imports — LongitudeGAM will depend on it in 2d-3. It is a
+        // product so that it gets an xcodebuild scheme: without one, the single target that
+        // actually links Prebid cannot be built for iOS at all, and `swift build` compiles it
+        // to an empty module on macOS. Four slices in this project have shipped iOS-only
+        // compile errors that the host build could not see; leaving the Prebid target in that
+        // blind spot would be the worst place to keep it.
+        .library(name: "LongitudeAuction", targets: ["LongitudeAuction"]),
     ],
     dependencies: [
         // Pinned .upToNextMajor(from: "13.0.0") to match Prebid's own constraint, so
@@ -64,6 +71,10 @@ let package = Package(
         .package(
             url: "https://github.com/googleads/swift-package-manager-google-mobile-ads.git",
             .upToNextMajor(from: "13.0.0")
+        ),
+        .package(
+            url: "https://github.com/Addkt/prebid-mobile-ios.git",
+            exact: "3.3.3-lngtd.1"
         ),
     ],
     targets: [
@@ -76,6 +87,18 @@ let package = Package(
             name: "LongitudeCore",
             dependencies: ["LNGTDExceptionShim"],
             path: "Sources/LongitudeCore"
+        ),
+        .target(
+            name: "LongitudeAuction",
+            dependencies: [
+                "LongitudeCore",
+                .product(
+                    name: "PrebidMobile",
+                    package: "prebid-mobile-ios",
+                    condition: .when(platforms: [.iOS])
+                )
+            ],
+            path: "Sources/LongitudeAuction"
         ),
         // GoogleMobileAds is iOS-only, and naively depending on it would end the
         // millisecond host test loop for the entire package. Two things keep it alive:
