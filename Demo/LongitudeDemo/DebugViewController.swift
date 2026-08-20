@@ -146,6 +146,9 @@ final class DebugViewController: UIViewController {
 
             lines.append("")
             lines.append("── slot demo_banner ──")
+            if let probe = probeBanner {
+                lines.append("state                  \(probe.debugLoadState)")
+            }
             if let plan = probeBanner?.lastPlan {
                 lines.append("gamPath                \(plan.gamPath)")
                 lines.append("uid                    \(plan.uid)")

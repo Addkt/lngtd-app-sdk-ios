@@ -31,10 +31,14 @@ public struct LongitudeConfiguration {
     /// as the primary.
     public var eventNonTrackingURL: URL
 
+    /// The distance in points beyond the viewport to eagerly load slots.
+    public var lazyLoadMarginPoints: Double
+
     public init(
         cacheDirectory: URL? = nil,
         configTimeout: TimeInterval = 1.5,
         tickInterval: TimeInterval = 1.0,
+        lazyLoadMarginPoints: Double = 500.0,
         eventAPIURL: URL = URLSessionEventTransport.defaultPrimaryURL,
         eventFallbackURL: URL = URLSessionEventTransport.defaultFallbackURL,
         eventNonTrackingURL: URL = URLSessionEventTransport.defaultNonTrackingURL
@@ -42,6 +46,7 @@ public struct LongitudeConfiguration {
         self.cacheDirectory = cacheDirectory ?? Self.defaultCacheDirectory()
         self.configTimeout = configTimeout
         self.tickInterval = tickInterval
+        self.lazyLoadMarginPoints = lazyLoadMarginPoints
         self.eventAPIURL = eventAPIURL
         self.eventFallbackURL = eventFallbackURL
         self.eventNonTrackingURL = eventNonTrackingURL

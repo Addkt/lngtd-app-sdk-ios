@@ -4,6 +4,15 @@ import GoogleMobileAds
 import LongitudeCore
 import UIKit
 
+private final class DummyDemandFetcher: LNGTDDemandFetching, @unchecked Sendable {
+    func fetchDemand(completion: @escaping @Sendable (LNGTDAuctionOutcome, [String: String]?, Double?) -> Void) {
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
+            completion(.noBids, nil, nil)
+        }
+    }
+    func stopAutoRefresh() {}
+}
+
 /// A banner slot. Drop-in replacement for `AdManagerBannerView`.
 ///
 /// **Wrap-and-forward, not subclass.** Subclassing `AdManagerBannerView` would mean
@@ -66,6 +75,9 @@ public final class LNGTDBannerView: UIView {
     /// the demo app's debug overlay to show the resolved floor and gamPath per slot.
     public private(set) var lastPlan: LongitudeSlotPlan?
 
+    /// Exposes the current load state (waiting, gated, auctioning) for the debug overlay.
+    public private(set) var debugLoadState: String = "idle"
+
     /// Fires after each load resolves, so an overlay can refresh without polling.
     public var onResolution: ((SlotResolution) -> Void)?
 
@@ -74,6 +86,19 @@ public final class LNGTDBannerView: UIView {
     private let gamBanner = AdManagerBannerView()
     private let engine: LongitudeEngine
     private let deviceClass: String
+
+    private lazy var slotController: LNGTDSlotController = {
+        let runner = LNGTDAuctionRunner(
+            fetcher: DummyDemandFetcher(),
+            timeout: 1.5
+        )
+        let controller = LNGTDSlotController(runner: runner)
+        controller.delegate = self
+        return controller
+    }()
+
+    private var currentPermit: LNGTDAuctionGateRelease?
+    private var pendingRequest: AdManagerRequest?
 
     /// Guards against a delegate callback arriving for a load we have already replaced.
     private var loadGeneration: UInt64 = 0
@@ -111,13 +136,6 @@ public final class LNGTDBannerView: UIView {
     }
 
     /// Returns nil rather than trapping.
-    ///
-    /// A slot name is required and no default is honest, so there is no usable
-    /// storyboard initialiser — but this is a *failable* initialiser, and UIKit will
-    /// still dispatch to it at runtime if someone puts this view in a nib. Returning nil
-    /// fails that nib load; `fatalError` would crash a publisher's app, which is the
-    /// exact outcome the 2g rules exist to prevent. (The SwiftLint rule flagged this
-    /// when it was a `fatalError`, which is the rule doing its job.)
     required init?(coder: NSCoder) {
         return nil
     }
@@ -131,61 +149,51 @@ public final class LNGTDBannerView: UIView {
     /// GMA request happens after an `await`. That matches GMA's own contract, where
     /// `load` is asynchronous and results arrive via the delegate.
     public func load(_ request: AdManagerRequest = AdManagerRequest()) {
+        releasePermit()
+
         loadGeneration &+= 1
-        let generation = loadGeneration
-        let auctionId = UUID().uuidString
 
-        Task { [weak self] in
-            guard let self else { return }
+        guard let copied = request.copy() as? AdManagerRequest else { return }
+        self.pendingRequest = copied
 
-            let resolution = await self.engine.resolve(
-                slot: self.slot,
-                auctionId: auctionId,
-                deviceClass: self.deviceClass,
-                sessionDepth: 0  // Phase 2e owns session depth.
-            )
-
-            // A newer load() superseded this one while we were resolving.
-            guard generation == self.loadGeneration else { return }
-
-            switch resolution {
-            case .longitude(let plan):
-                self.applyPlan(plan)
-                self.passthroughCause = nil
-                self.lastPlan = plan
-            case .passthrough(let cause):
-                // Leave adUnitID and validAdSizes exactly as the publisher set them.
-                self.passthroughCause = cause
-                self.lastPlan = nil
-            }
-
-            self.onResolution?(resolution)
-            self.gamBanner.load(request)
-        }
+        slotController.load(existingTargeting: copied.customTargeting)
     }
 
     public override func didMoveToSuperview() {
         super.didMoveToSuperview()
         if superview == nil {
             Longitude.viewabilityObserver?.deregister(view: self)
+            teardown()
         }
+    }
+
+    private func teardown() {
+        // Bump the generation, or every in-flight continuation survives teardown.
+        //
+        // The lazy-load wait is a 250ms `asyncAfter` that re-schedules itself and stops only on
+        // a generation mismatch. A banner scrolled out of a reused cell is detached but still
+        // retained, so the geometry check keeps saying "not near the viewport" and the poll keeps
+        // rearming — 4Hz, forever, for every banner the app has ever created. The same bump
+        // discards the floor resolution and permit callbacks for a load nobody is waiting on.
+        loadGeneration &+= 1
+        releasePermit()
+        slotController.teardown()
+    }
+
+    private func releasePermit() {
+        currentPermit?.release()
+        currentPermit = nil
     }
 
     private func applyPlan(_ plan: LongitudeSlotPlan) {
         gamBanner.adUnitID = plan.gamPath
 
-        // Config sizes win when present; otherwise keep the publisher's, so a config
-        // that omits sizes degrades to their intent rather than to nothing.
         if let sizes = plan.sizes, !sizes.isEmpty {
             let converted = sizes.compactMap(Self.adSize(from:))
             if !converted.isEmpty {
                 applyValidAdSizes(converted)
             }
         }
-
-        // plan.resolvedFloor and plan.refreshSeconds are unused on this path until
-        // LongitudeAuction (M2) and refresh (M4). They are carried on the plan rather
-        // than recomputed there.
     }
 
     private func applyValidAdSizes(_ sizes: [AdSize]) {
@@ -195,11 +203,6 @@ public final class LNGTDBannerView: UIView {
         }
     }
 
-    /// `[width, height]` from the config to a GMA `AdSize`.
-    ///
-    /// Returns nil rather than substituting a default for a malformed pair: silently
-    /// serving a 320x50 where the config asked for something else would be a wrong ad
-    /// that looks correct.
     private static func adSize(from pair: [Int]) -> AdSize? {
         guard pair.count == 2, pair[0] > 0, pair[1] > 0 else { return nil }
         let size = adSizeFor(cgSize: CGSize(width: pair[0], height: pair[1]))
@@ -207,16 +210,123 @@ public final class LNGTDBannerView: UIView {
         return size
     }
 
-    /// `phone` or `tablet`, matching the floor ladder's device-class segment.
-    ///
-    /// Note this is NOT the web's `mobile`/`desktop` vocabulary — see
-    /// Tools/FloorContract/README.md for why the two runtimes cannot share spellings.
     public static func currentDeviceClass() -> String {
         UIDevice.current.userInterfaceIdiom == .pad ? "tablet" : "phone"
     }
 
     public override var intrinsicContentSize: CGSize {
         cgSize(for: gamBanner.adSize)
+    }
+
+    private func waitAndAcquire(resolution: SlotResolution, generation: UInt64) {
+        guard let plan = resolution.plan else {
+            slotController.provideResolution(resolution)
+            return
+        }
+
+        if plan.lazyLoad {
+            let margin = Longitude.lazyLoadMarginPoints
+            let snapshot = LNGTDViewSnapshotBuilder.compute(for: self)
+
+            if !LNGTDLazyLoad.shouldLoad(snapshot: snapshot, marginPoints: margin) {
+                self.debugLoadState = "waiting"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                    guard let self = self, self.loadGeneration == generation else { return }
+                    self.waitAndAcquire(resolution: resolution, generation: generation)
+                }
+                return
+            }
+        }
+
+        guard let gate = Longitude.auctionGate else {
+            self.debugLoadState = "auctioning"
+            slotController.provideResolution(resolution)
+            return
+        }
+
+        self.debugLoadState = "gated"
+        let release = LNGTDAuctionGateRelease(host: gate)
+        // Held from now, not from the moment the permit is granted.
+        //
+        // Assigning this inside `onAcquire` left `currentPermit` nil for the whole queued
+        // window, so a slot scrolled away while waiting had nothing to release and stayed in the
+        // queue. LIFO then hands it a turn ahead of live slots, and it burns that turn
+        // discovering it is dead. Owning the release up front means teardown cancels the queue
+        // entry instead.
+        self.currentPermit = release
+        let token = gate.acquire { [weak self] in
+            DispatchQueue.main.async {
+                guard let self = self, self.loadGeneration == generation else {
+                    release.release()
+                    return
+                }
+                self.debugLoadState = "auctioning"
+                self.currentPermit = release
+                self.slotController.provideResolution(resolution)
+            }
+        }
+        release.arm(token)
+    }
+}
+
+extension SlotResolution {
+    var plan: LongitudeSlotPlan? {
+        if case .longitude(let plan) = self { return plan }
+        return nil
+    }
+}
+
+// MARK: - LNGTDSlotControllerDelegate
+extension LNGTDBannerView: LNGTDSlotControllerDelegate {
+    public func resolveFloor(auctionId: String) {
+        let generation = self.loadGeneration
+        Task { [weak self] in
+            guard let self else { return }
+
+            let resolution = await self.engine.resolve(
+                slot: self.slot,
+                auctionId: auctionId,
+                deviceClass: self.deviceClass,
+                sessionDepth: 0
+            )
+
+            guard generation == self.loadGeneration else { return }
+
+            switch resolution {
+            case .longitude(let plan):
+                self.applyPlan(plan)
+                self.passthroughCause = nil
+                self.lastPlan = plan
+            case .passthrough(let cause):
+                self.passthroughCause = cause
+                self.lastPlan = nil
+            }
+
+            self.onResolution?(resolution)
+            self.waitAndAcquire(resolution: resolution, generation: generation)
+        }
+    }
+
+    public func requestGAM(plan: LongitudeSlotPlan, auctionId: String, targeting: [String: Any]) {
+        releasePermit()
+        guard let request = pendingRequest else { return }
+        request.customTargeting = targeting
+        gamBanner.load(request)
+    }
+
+    public func emitBid(auctionId: String, late: Bool) {
+        // Phase 2e will implement bid emission.
+    }
+
+    public func emitPassthrough(cause: PassthroughCause, targeting: [String: Any]) {
+        releasePermit()
+        guard let request = pendingRequest else { return }
+        request.customTargeting = targeting
+        gamBanner.load(request)
+    }
+
+    public func emitFailure(_ failure: LNGTDSlotFailure) {
+        releasePermit()
     }
 }
 
@@ -225,25 +335,18 @@ public final class LNGTDBannerView: UIView {
 extension LNGTDBannerView: BannerViewDelegate {
     public func bannerViewDidReceiveAd(_ bannerView: BannerView) {
         invalidateIntrinsicContentSize()
+        slotController.gamLoaded()
         delegate?.bannerViewDidReceiveAd(self)
     }
 
     public func bannerView(_ bannerView: BannerView, didFailToReceiveAdWithError error: Error) {
+        slotController.gamFailed()
         delegate?.bannerView(self, didFailToReceiveAdWithError: error)
     }
 
     public func bannerViewDidRecordImpression(_ bannerView: BannerView) {
-        // Measurement starts HERE, when a creative has actually rendered — not at `load()`.
-        //
-        // Registering at request time means an empty slot accrues dwell and can post a
-        // viewable_impression for a slot that never showed an ad, and then post a second one
-        // when the creative arrives and resets the latch. That reproduced on device exactly
-        // once out of two runs: whether it double-fires depends on whether the ad renders
-        // inside the first second, which is the worst way for an over-reporting bug to behave.
-        //
-        // Registering is also the latch reset: a new creative is a new impression, and
-        // `register` starts the entry at `.idle`.
         Longitude.viewabilityObserver?.register(view: self, unit: slot)
+        slotController.impressionRecorded()
         delegate?.bannerViewDidRecordImpression(self)
     }
 

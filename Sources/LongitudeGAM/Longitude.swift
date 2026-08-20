@@ -62,6 +62,9 @@ public enum Longitude {
 
     private static var connectionMonitor: LNGTDConnectionMonitor?
 
+    static var auctionGate: LNGTDAuctionGate?
+    static var lazyLoadMarginPoints: Double = 0
+
     /// Refreshes device metadata (e.g. after the ATT prompt resolves).
     public static func refreshDeviceMetadata() {
         guard let provider = metadataProvider, let box = metadataBox else { return }
@@ -96,6 +99,9 @@ public enum Longitude {
         let box = LNGTDDeviceMetadataBox(metadata: provider.currentMetadata())
         metadataBox = box
 
+        auctionGate = LNGTDAuctionGate()
+        lazyLoadMarginPoints = configuration.lazyLoadMarginPoints
+
         let store = configuration.makeStore(account: accountId, section: section)
         let created = LongitudeEngine(store: store, section: section)
         engine = created
@@ -113,6 +119,29 @@ public enum Longitude {
 
         created.startNonBlocking()
 
+        buildEventPipeline(
+            configuration: configuration,
+            metadataBox: box,
+            rateBox: rateBox,
+            versionBox: versionBox
+        )
+
+        if !waitsForATT {
+            startAdSDK()
+        }
+    }
+
+    /// Assembles the event layer and starts it.
+    ///
+    /// Split out of `start()`, which had grown past the function-length limit as each of 2e-1
+    /// through 2f added a piece. Nothing here is conditional — it is one long construction — so
+    /// the extraction is purely so `start()` reads as the sequence of subsystems it sets up.
+    private static func buildEventPipeline(
+        configuration: LongitudeConfiguration,
+        metadataBox: LNGTDDeviceMetadataBox,
+        rateBox: ConfigRateBox,
+        versionBox: ConfigVersionBox
+    ) {
         let eventStoreDir = configuration.cacheDirectory
             .deletingLastPathComponent()
             .appendingPathComponent("events", isDirectory: true)
@@ -140,7 +169,7 @@ public enum Longitude {
             // A nil rate means no config has ever carried one. 1.0 is the deliberate direction:
             // over-sending is recoverable, under-sending silently deletes reporting.
             isSampled: { session.isSampled(sampler: sampler, sampleRate: rateBox.rate ?? 1.0) },
-            metadata: { box.metadata },
+            metadata: { metadataBox.metadata },
             configVersion: { versionBox.version },
             connection: { connectionMon.currentConnection() },
             deviceType: UIDevice.current.userInterfaceIdiom == .pad ? .tablet : .phone,
@@ -160,10 +189,6 @@ public enum Longitude {
 
         // Kicks the launch drain and installs the flush timer. Non-blocking.
         createdPipeline.start()
-
-        if !waitsForATT {
-            startAdSDK()
-        }
     }
 
     /// Starts GMA. Call this after the ATT prompt resolves when `waitsForATT` was true.
