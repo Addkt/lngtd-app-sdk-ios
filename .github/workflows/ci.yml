@@ -80,8 +80,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pick the newest Xcode the runner image actually ships, rather than naming one.
+      #
+      # This step used to hardcode /Applications/Xcode_26.app, which does not exist on
+      # macos-15. It failed on the first line of the job, so CI never built or tested this
+      # package even once — every run was red for a reason unrelated to the code. A version
+      # pin that does not exist is worse than no pin.
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          latest=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$latest" ]; then
+            echo "::error::No Xcode found in /Applications on this runner."
+            exit 1
+          fi
+          echo "Selecting $latest"
+          sudo xcode-select -s "$latest/Contents/Developer"
 
       - name: Show toolchain
         run: swift --version && xcodebuild -version
@@ -97,11 +111,22 @@ jobs:
       - name: swift test (host)
         run: swift test
 
-      # The only build that compiles LongitudeGAM for real. If this is skipped, the
-      # banner wrapper is unverified: nothing in the host suite touches it.
-      - name: xcodebuild (iOS Simulator)
+      # The only builds that compile the iOS targets for real. Without these, the banner
+      # wrapper and the Prebid adapter are unverified: nothing in the host suite touches
+      # either, because both compile to empty modules on macOS. Five slices in this repo
+      # shipped iOS-only compile errors that `swift build` could not see.
+      - name: xcodebuild LongitudeGAM (iOS Simulator)
         run: |
           xcodebuild -scheme LongitudeGAM \
+            -destination 'generic/platform=iOS Simulator' \
+            -skipPackagePluginValidation \
+            build
+
+      # LongitudeAuction is the only target that links Prebid. It is a library product
+      # specifically so it has a scheme and can be built here.
+      - name: xcodebuild LongitudeAuction (iOS Simulator)
+        run: |
+          xcodebuild -scheme LongitudeAuction \
             -destination 'generic/platform=iOS Simulator' \
             -skipPackagePluginValidation \
             build
@@ -109,13 +134,18 @@ jobs:
       # A macOS build that stops compiling LongitudeGAM to an empty module would
       # silently move the host suite off the fast path, so assert the module is still
       # produced rather than trusting it.
-      - name: assert LongitudeGAM still builds for the host
+      - name: assert the iOS targets still build for the host
         run: |
-          test -f "$(swift build --show-bin-path)/Modules/LongitudeGAM.swiftmodule" || {
-            echo "::error::LongitudeGAM no longer builds for macOS. Its sources must stay"
-            echo "wrapped in #if os(iOS) so the host test loop keeps working."
-            exit 1
-          }
+          set -euo pipefail
+          bin=$(swift build --show-bin-path)
+          for module in LongitudeGAM LongitudeAuction; do
+            test -f "$bin/Modules/$module.swiftmodule" || {
+              echo "::error::$module no longer builds for macOS. Its sources must stay"
+              echo "wrapped in #if os(iOS), and its iOS-only dependency conditional, so the"
+              echo "host test loop keeps working without pulling the ad SDKs."
+              exit 1
+            }
+          done
 
   lint:
     name: SwiftLint
