@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "version": "demo-bundled-1",
+  "ttl": 1800,
+  "platform": "ios",
+  "geo": {
+    "country": "US",
+    "continent": "NA",
+    "regionState": null,
+    "asn": null
+  },
+  "account": {
+    "name": "Longitude Demo",
+    "adsEnabled": true,
+    "prebidEnabled": false,
+    "dynamicFloorsEnabled": true,
+    "auctionTimeoutMs": 1000,
+    "configTimeoutMs": 1500,
+    "sampleRate": 1
+  },
+  "app": {
+    "bundle": "com.lngtd.demo.LongitudeDemo",
+    "name": "Longitude Demo",
+    "publisherId": "demo"
+  },
+  "features": {
+    "refresh": {
+      "seconds": 30,
+      "refreshRequiresForeground": true,
+      "refreshRequiresVisible": true
+    },
+    "killSwitch": false
+  },
+  "prebid": {
+    "allowUnknownBidderCodes": false
+  },
+  "adUnits": {
+    "demo_banner": {
+      "uid": "u_demo_banner",
+      "gamPath": "/21775744923/example/adaptive-banner",
+      "gpid": null,
+      "adFormat": "banner",
+      "sizes": [[320, 50]],
+      "prebidConfigId": null,
+      "baseFloor": 0.15,
+      "dynamicFloorParameters": {},
+      "timeoutMs": null,
+      "refresh": null,
+      "lazyLoad": null,
+      "video": null,
+      "impOrtb": null,
+      "storedRequestId": null
+    },
+    "feed_slot": {
+      "uid": "u_feed_slot",
+      "gamPath": "/21775744923/example/adaptive-banner",
+      "gpid": null,
+      "adFormat": "banner",
+      "sizes": [[320, 50]],
+      "prebidConfigId": null,
+      "baseFloor": 0.1,
+      "dynamicFloorParameters": {},
+      "timeoutMs": null,
+      "refresh": { "seconds": 60 },
+      "lazyLoad": null,
+      "video": null,
+      "impOrtb": null,
+      "storedRequestId": null
+    }
+  },
+  "floors": {
+    "u_demo_banner": {
+      "default": 0.25,
+      "ios_US_phone_app_A": 0.65,
+      "ios_US_tablet_app_A": 0.55
+    },
+    "u_feed_slot": {
+      "default": 0.2
+    }
+  },
+  "excludeFromRefresh": [],
+  "creativeIdBlocks": [],
+  "tests": [],
+  "adUnitsRef": null
+}

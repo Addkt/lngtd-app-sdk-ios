@@ -1,0 +1,54 @@
+# Generated into LongitudeDemo.xcodeproj by `xcodegen` — the project file itself is
+# gitignored, because a hand-maintained pbxproj is a merge-conflict generator and this
+# manifest is the readable source of truth.
+#
+#   brew install xcodegen
+#   cd Demo && xcodegen generate
+name: LongitudeDemo
+
+options:
+  bundleIdPrefix: com.lngtd.demo
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+packages:
+  Longitude:
+    # The SDK under test, as a local package. Building the demo therefore builds
+    # LongitudeGAM for the simulator, which is the only build that typechecks it.
+    path: ../
+
+targets:
+  LongitudeDemo:
+    type: application
+    platform: iOS
+    sources:
+      - path: LongitudeDemo
+    dependencies:
+      - package: Longitude
+        product: LongitudeGAM
+    info:
+      path: LongitudeDemo/Info.plist
+      properties:
+        CFBundleDisplayName: Longitude Demo
+        UILaunchStoryboardName: ""
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Google's public test application id. GMA raises at start() without a
+        # GADApplicationIdentifier, so this is required, not decorative. A real
+        # publisher substitutes their own.
+        GADApplicationIdentifier: ca-app-pub-3940256099942544~1458002511
+        # SKAdNetwork identifiers are omitted deliberately: this demo never runs
+        # against production demand, and a stale partial list is worse than none.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.lngtd.demo.LongitudeDemo
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"

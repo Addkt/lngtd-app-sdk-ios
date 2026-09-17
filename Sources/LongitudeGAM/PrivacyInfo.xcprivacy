@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSPrivacyTracking</key>
+    <true/>
+    <!-- Domains listed here are BLOCKED by the OS when the user denies tracking, so this
+         list is a runtime switch, not documentation. Only domains that actually receive a
+         tracking identifier belong in it.
+
+         floors.lngtd.com is deliberately ABSENT. The config request carries account,
+         section, ct and p and no identifier of any kind (ConfigFetchCoordinator.buildURL),
+         so it is not tracking. Listing it would block config fetches for every ATT-denied
+         user: no floor updates, and the kill switch — the SDK's emergency stop — could
+         never reach them. -->
+    <key>NSPrivacyTrackingDomains</key>
+    <array>
+        <string>ld.lngtd.com</string>
+        <string>it.lngtd.com</string>
+    </array>
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array>
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeDeviceID</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeThirdPartyAdvertising</string>
+            </array>
+        </dict>
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeProductInteraction</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeThirdPartyAdvertising</string>
+            </array>
+        </dict>
+    </array>
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>35F9.1</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

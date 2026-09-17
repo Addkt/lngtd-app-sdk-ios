@@ -1,0 +1,130 @@
+# Phase 2g requires these to be CI-enforced: no try!, no as!, no force unwrap
+# outside tests, no fatalError, no DispatchSemaphore.wait on main, no synchronous
+# network. The first four map onto real SwiftLint rules. The last two do not —
+# see the custom_rules note below.
+
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - Tools
+
+opt_in_rules:
+  - force_unwrapping
+  - empty_count
+  - closure_spacing
+  - explicit_init
+  - first_where
+  - last_where
+  - redundant_nil_coalescing
+  - unused_import
+  - yoda_condition
+
+analyzer_rules:
+  - unused_declaration
+
+# 2g: these are errors, not warnings. A force unwrap that ships is a crash in a
+# publisher's app, which is exactly the failure mode LNGTDGuard exists to prevent.
+force_try:
+  severity: error
+force_cast:
+  severity: error
+force_unwrapping:
+  severity: error
+
+line_length:
+  warning: 120
+  error: 160
+  ignores_comments: true
+
+type_body_length:
+  warning: 300
+  error: 450
+
+file_length:
+  warning: 500
+  error: 800
+
+function_body_length:
+  warning: 60
+  error: 100
+
+cyclomatic_complexity:
+  warning: 12
+  error: 20
+
+# Single-letter bindings are idiomatic in Swift pattern matches — `case
+# .number(let n)` reads better than a ceremonial longer name, and the enclosing
+# case already says what it is. This rule as originally configured (min 2) flagged
+# 16 such bindings across the floor resolver and fixture decoder without catching
+# anything; it was the config that was wrong, not the code. Type names still have
+# to be meaningful, which is what the rule is actually useful for.
+identifier_name:
+  min_length:
+    warning: 1
+  excluded: [id, ok, to, at, dc]
+
+# `AppConfig.AdUnit.CodingKeys` is three levels deep and entirely idiomatic — a
+# nested model type with its own coding keys. The default limit of 1 would force
+# either a flattened `AppConfigAdUnit` or CodingKeys hoisted away from the type it
+# belongs to, both worse than the nesting.
+nesting:
+  type_level: 3
+
+disabled_rules:
+  # Trailing commas in multi-line literals are a deliberate choice here: adding an
+  # entry then touches one line instead of two, which keeps diffs and blame honest.
+  # (Note `mandatory_comma: false` does not permit them — that is the default, and
+  # the rule still flags them. The rule has to be off.)
+  - trailing_comma
+  # Both are useful signals and both were acted on rather than silenced: the
+  # eleven-parameter resolve became FloorRequest, and input unwrapping moved into
+  # Inputs. Left enabled.
+  #   - cyclomatic_complexity
+  #   - function_body_length
+
+custom_rules:
+  no_fatal_error:
+    included: ".*/Sources/.*\\.swift"
+    name: "No fatalError in shipping code"
+    regex: "\\bfatalError\\s*\\("
+    message: "fatalError crashes the publisher's app. Return a fallback via LNGTDGuard instead."
+    severity: error
+
+  no_precondition_failure:
+    included: ".*/Sources/.*\\.swift"
+    name: "No preconditionFailure in shipping code"
+    regex: "\\b(preconditionFailure|assertionFailure)\\s*\\("
+    message: "Traps in release/debug respectively. Degrade to passthrough instead."
+    severity: error
+
+  # HEURISTIC, not a proof. SwiftLint cannot know which thread a call runs on, so
+  # this flags every semaphore wait and relies on a reviewer to confirm. Phase 2g
+  # asks for "no DispatchSemaphore.wait on main"; the enforceable approximation is
+  # no semaphore waits in Sources at all, which the SDK does not need — the config
+  # layer is async and Longitude.start is explicitly non-blocking.
+  no_semaphore_wait:
+    included: ".*/Sources/.*\\.swift"
+    name: "No DispatchSemaphore.wait"
+    regex: "DispatchSemaphore[\\s\\S]{0,80}?\\.wait\\s*\\("
+    message: "Longitude.start must never block. If a wait is genuinely required, justify it in review and add a targeted swiftlint:disable."
+    severity: error
+
+  # Also a heuristic: catches the synchronous-load APIs by name.
+  no_sync_network:
+    included: ".*/Sources/.*\\.swift"
+    name: "No synchronous network"
+    regex: "(Data|String)\\s*\\(\\s*contentsOf:\\s*URL|NSURLConnection\\.sendSynchronousRequest"
+    message: "Synchronous network on any thread blocks a publisher's app. Use URLSession's async API."
+    severity: error
+
+  # The plan's failure mode is passthrough, never failure. An empty catch hides
+  # the reason and defeats config_failure logging.
+  no_empty_catch:
+    included: ".*/Sources/.*\\.swift"
+    name: "No silently empty catch"
+    regex: "catch\\s*\\{\\s*\\}"
+    message: "Swallowing an error loses the config_failure reason. Log it, then fall back."
+    severity: error

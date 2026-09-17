@@ -1,0 +1,129 @@
+{
+  "schema": 1,
+  "version": "sn-app-2026.08.06.3",
+  "ttl": 1800,
+  "geo": {
+    "country": "US",
+    "continent": "NA",
+    "regionState": "NY",
+    "asn": "7922"
+  },
+  "account": {
+    "name": "solitaired",
+    "adsEnabled": true,
+    "prebidEnabled": true,
+    "prebidServerEndpoint": "https://s2s.lngtd.com/openrtb2/auction",
+    "dynamicFloorsEnabled": true,
+    "auctionTimeoutMs": 1000,
+    "configTimeoutMs": 1500,
+    "sampleRate": 0.1,
+    "eventEndpoint": "https://ld.lngtd.com/",
+    "eventFallbackEndpoint": "https://ld2.lngtd.com/"
+  },
+  "app": {
+    "bundle": "com.unwind.solitaired",
+    "storeUrl": "https://apps.apple.com/app/id123456",
+    "name": "Solitaired",
+    "publisherId": "pub-1234567890",
+    "cat": [
+      "IAB9-30"
+    ]
+  },
+  "features": {
+    "viewability": {
+      "minPercent": 50,
+      "minDurationMs": 1000
+    },
+    "refresh": {
+      "seconds": 30,
+      "refreshRequiresForeground": true,
+      "refreshRequiresVisible": true
+    },
+    "killSwitch": false
+  },
+  "prebid": {
+    "aliases": {},
+    "allowUnknownBidderCodes": false,
+    "globalOrtb": {
+      "bcat": [
+        "IAB25",
+        "IAB26"
+      ]
+    }
+  },
+  "adUnits": {
+    "home_top": {
+      "uid": "u_home_top",
+      "gamPath": "/1234/app/solitaired/home",
+      "gpid": "/home_top",
+      "adFormat": "banner",
+      "sizes": [
+        [
+          320,
+          50
+        ],
+        [
+          300,
+          250
+        ]
+      ],
+      "prebidConfigId": "cfg-home-top",
+      "baseFloor": 0.25,
+      "dynamicFloorParameters": {
+        "sensitivity": 0.8,
+        "floorMin": 0.1
+      },
+      "timeoutMs": 1000,
+      "refresh": {
+        "seconds": 45
+      },
+      "lazyLoad": false,
+      "video": null,
+      "impOrtb": {
+        "ext": {
+          "data": {
+            "pbadslot": "/home_top"
+          }
+        }
+      },
+      "storedRequestId": null
+    },
+    "interstitial_main": {
+      "uid": "u_int_main",
+      "gamPath": "/1234/app/solitaired/int",
+      "gpid": null,
+      "adFormat": "interstitial",
+      "sizes": [
+        [
+          320,
+          480
+        ]
+      ],
+      "prebidConfigId": null,
+      "baseFloor": null,
+      "dynamicFloorParameters": null,
+      "timeoutMs": null,
+      "refresh": null,
+      "lazyLoad": null,
+      "video": null,
+      "impOrtb": null,
+      "storedRequestId": null
+    }
+  },
+  "floors": {
+    "u_home_top": {
+      "default": 0.25,
+      "ios_US_phone_app_A": 0.65
+    },
+    "u_int_main": {
+      "default": 1.5
+    }
+  },
+  "excludeFromRefresh": [
+    "u_int_main"
+  ],
+  "creativeIdBlocks": [],
+  "tests": [],
+  "adUnitsRef": null,
+  "platform": "ios"
+}
